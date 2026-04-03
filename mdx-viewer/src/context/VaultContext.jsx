@@ -1,0 +1,314 @@
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
+
+const VaultContext = createContext(null)
+
+// ─── Frontmatter parser simple ────────────────────────────────────────────
+function parseFrontmatter(content) {
+  const m = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  if (!m) return { frontmatter: {}, body: content }
+  const fm = {}
+  m[1].split('\n').forEach(line => {
+    const sep = line.indexOf(':')
+    if (sep === -1) return
+    const key = line.slice(0, sep).trim()
+    let val = line.slice(sep + 1).trim()
+    // tableau [a, b, c]
+    if (val.startsWith('[') && val.endsWith(']')) {
+      val = val.slice(1, -1).split(',').map(s => s.trim()).filter(Boolean)
+    }
+    if (key) fm[key] = val
+  })
+  return { frontmatter: fm, body: content.slice(m[0].length) }
+}
+
+// ─── Extraction de tags depuis le contenu ─────────────────────────────────
+function extractTags(content) {
+  const tags = new Set()
+  // Tags frontmatter
+  const { frontmatter } = parseFrontmatter(content)
+  if (frontmatter.tags) {
+    const t = Array.isArray(frontmatter.tags) ? frontmatter.tags : [frontmatter.tags]
+    t.forEach(tag => tags.add(String(tag).toLowerCase()))
+  }
+  // Tags inline #tag (hors blocs de code)
+  const withoutCode = content.replace(/```[\s\S]*?```/g, '').replace(/`[^`]+`/g, '')
+  const matches = withoutCode.matchAll(/#([\w-]+)/g)
+  for (const m of matches) tags.add(m[1].toLowerCase())
+  return [...tags]
+}
+
+export function VaultProvider({ children }) {
+  const [vaultPath, setVaultPath] = useState(null)
+  const [vaultName, setVaultName] = useState(null)
+  const [tree, setTree] = useState([])
+  const [vaultFiles, setVaultFiles] = useState([])
+
+  // ─── Onglets ─────────────────────────────────────────────────────────────
+  // tab: { path, name, content, isDirty, frontmatter }
+  const [tabs, setTabs] = useState([])
+  const [activeTabPath, setActiveTabPath] = useState(null)
+
+  // ─── Historique ──────────────────────────────────────────────────────────
+  const historyRef = useRef([])   // tableau de paths
+  const histIdxRef = useRef(-1)
+  const [canBack, setCanBack] = useState(false)
+  const [canForward, setCanForward] = useState(false)
+
+  const updateNavState = useCallback(() => {
+    setCanBack(histIdxRef.current > 0)
+    setCanForward(histIdxRef.current < historyRef.current.length - 1)
+  }, [])
+
+  // ─── Backlinks ───────────────────────────────────────────────────────────
+  const [backlinks, setBacklinks] = useState([]) // [{ path, name }]
+
+  // ─── Tags ────────────────────────────────────────────────────────────────
+  const [allTags, setAllTags] = useState({}) // { tagName: [{ path, name }] }
+
+  // ─── Chargement au démarrage ─────────────────────────────────────────────
+  useEffect(() => {
+    window.electron.getVault().then((result) => {
+      if (result.ok) {
+        setVaultPath(result.vaultPath)
+        setVaultName(result.vaultPath.split(/[\\/]/).pop())
+        setTree(result.tree)
+        refreshVaultFiles()
+      }
+    })
+
+    window.electron.onVaultChanged((newTree) => {
+      setTree(newTree)
+      window.electron.getVaultFiles().then(files => {
+        setVaultFiles(files)
+        rebuildTags(files)
+      })
+    })
+
+    window.electron.onOpenFile(({ path, name, content }) => {
+      openTab({ path, name, content })
+    })
+  }, [])
+
+  // ─── Helpers ─────────────────────────────────────────────────────────────
+  const refreshVaultFiles = useCallback(async () => {
+    const files = await window.electron.getVaultFiles()
+    setVaultFiles(files)
+    rebuildTags(files)
+  }, [])
+
+  async function rebuildTags(files) {
+    const tagMap = {}
+    for (const f of files) {
+      const result = await window.electron.readVaultFile(f.path)
+      if (!result.ok) continue
+      const tags = extractTags(result.content)
+      tags.forEach(tag => {
+        if (!tagMap[tag]) tagMap[tag] = []
+        tagMap[tag].push({ path: f.path, name: f.name })
+      })
+    }
+    setAllTags(tagMap)
+  }
+
+  // ─── Vault ───────────────────────────────────────────────────────────────
+  const openVault = useCallback(async () => {
+    const result = await window.electron.openVault()
+    if (result.ok) {
+      setVaultPath(result.vaultPath)
+      setVaultName(result.vaultPath.split(/[\\/]/).pop())
+      setTree(result.tree)
+      setTabs([])
+      setActiveTabPath(null)
+      historyRef.current = []
+      histIdxRef.current = -1
+      updateNavState()
+      const files = await window.electron.getVaultFiles()
+      setVaultFiles(files)
+      rebuildTags(files)
+    }
+  }, [updateNavState])
+
+  // ─── Onglets ─────────────────────────────────────────────────────────────
+  const openTab = useCallback(({ path, name, content }) => {
+    const { frontmatter } = parseFrontmatter(content)
+    setTabs(prev => {
+      const exists = prev.find(t => t.path === path)
+      if (exists) return prev.map(t => t.path === path ? { ...t, content, frontmatter } : t)
+      return [...prev, { path, name, content, isDirty: false, frontmatter }]
+    })
+    setActiveTabPath(path)
+
+    // Historique
+    const hist = historyRef.current
+    const idx = histIdxRef.current
+    // Tronque les "forward" si on navigue depuis le milieu
+    const newHist = hist.slice(0, idx + 1)
+    if (newHist[newHist.length - 1] !== path) {
+      newHist.push(path)
+    }
+    historyRef.current = newHist
+    histIdxRef.current = newHist.length - 1
+    updateNavState()
+  }, [updateNavState])
+
+  const closeTab = useCallback((path) => {
+    setTabs(prev => {
+      const next = prev.filter(t => t.path !== path)
+      if (activeTabPath === path) {
+        const closed = prev.findIndex(t => t.path === path)
+        const newActive = next[Math.min(closed, next.length - 1)]
+        setActiveTabPath(newActive?.path ?? null)
+      }
+      return next
+    })
+  }, [activeTabPath])
+
+  const setActiveTab = useCallback((path) => {
+    setActiveTabPath(path)
+    // Historique
+    const hist = historyRef.current
+    const idx = histIdxRef.current
+    const newHist = hist.slice(0, idx + 1)
+    if (newHist[newHist.length - 1] !== path) {
+      newHist.push(path)
+      historyRef.current = newHist
+      histIdxRef.current = newHist.length - 1
+      updateNavState()
+    }
+  }, [updateNavState])
+
+  const updateTabContent = useCallback((path, content) => {
+    const { frontmatter } = parseFrontmatter(content)
+    setTabs(prev => prev.map(t => t.path === path ? { ...t, content, isDirty: true, frontmatter } : t))
+  }, [])
+
+  const markTabSaved = useCallback((path) => {
+    setTabs(prev => prev.map(t => t.path === path ? { ...t, isDirty: false } : t))
+  }, [])
+
+  // ─── Ouverture de fichier ─────────────────────────────────────────────────
+  const openFileByPath = useCallback(async (filePath) => {
+    // Si déjà ouvert en onglet, juste switcher
+    const existing = tabs.find(t => t.path === filePath)
+    if (existing) { setActiveTab(filePath); return { ok: true } }
+    const result = await window.electron.readVaultFile(filePath)
+    if (result.ok) openTab({ path: result.path, name: result.name, content: result.content })
+    return result
+  }, [tabs, setActiveTab, openTab])
+
+  const openFileByName = useCallback(async (name) => {
+    const resolved = await window.electron.resolveWikiLink(name)
+    if (resolved) return openFileByPath(resolved)
+    return { ok: false }
+  }, [openFileByPath])
+
+  // ─── Historique ──────────────────────────────────────────────────────────
+  const navigateBack = useCallback(() => {
+    const idx = histIdxRef.current
+    if (idx <= 0) return
+    histIdxRef.current = idx - 1
+    const path = historyRef.current[histIdxRef.current]
+    setActiveTabPath(path)
+    updateNavState()
+    // Charge si pas en onglet
+    if (!tabs.find(t => t.path === path)) openFileByPath(path)
+  }, [tabs, openFileByPath, updateNavState])
+
+  const navigateForward = useCallback(() => {
+    const idx = histIdxRef.current
+    if (idx >= historyRef.current.length - 1) return
+    histIdxRef.current = idx + 1
+    const path = historyRef.current[histIdxRef.current]
+    setActiveTabPath(path)
+    updateNavState()
+    if (!tabs.find(t => t.path === path)) openFileByPath(path)
+  }, [tabs, openFileByPath, updateNavState])
+
+  // ─── Backlinks (recalcul quand fichier actif change) ─────────────────────
+  useEffect(() => {
+    if (!activeTabPath || !vaultFiles.length) { setBacklinks([]); return }
+    const basename = activeTabPath.split(/[\\/]/).pop().replace(/\.(mdx?|md)$/, '')
+    const pattern = new RegExp(`\\[\\[${basename}(?:\\|[^\\]]*)?\\]\\]`, 'i')
+
+    async function compute() {
+      const links = []
+      for (const f of vaultFiles) {
+        if (f.path === activeTabPath) continue
+        const r = await window.electron.readVaultFile(f.path)
+        if (r.ok && pattern.test(r.content)) links.push({ path: f.path, name: f.name })
+      }
+      setBacklinks(links)
+    }
+    compute()
+  }, [activeTabPath, vaultFiles])
+
+  // ─── CRUD fichiers ────────────────────────────────────────────────────────
+  const createFile = useCallback(async (opts) => {
+    const result = await window.electron.createFile(opts)
+    if (result.ok) openTab({ path: result.path, name: result.name, content: result.content })
+    return result
+  }, [openTab])
+
+  const createFolder = useCallback((opts) => window.electron.createFolder(opts), [])
+
+  const renameFile = useCallback(async (opts) => {
+    const result = await window.electron.renameFile(opts)
+    if (result.ok) {
+      setTabs(prev => prev.map(t =>
+        t.path === opts.oldPath ? { ...t, path: result.newPath, name: result.newName } : t
+      ))
+      if (activeTabPath === opts.oldPath) setActiveTabPath(result.newPath)
+    }
+    return result
+  }, [activeTabPath])
+
+  const deleteFile = useCallback(async (filePath) => {
+    const result = await window.electron.deleteFile(filePath)
+    if (result.ok) closeTab(filePath)
+    return result
+  }, [closeTab])
+
+  const deleteFolder = useCallback(async (folderPath) => {
+    const result = await window.electron.deleteFolder(folderPath)
+    if (result.ok) {
+      setTabs(prev => {
+        const remaining = prev.filter(t => !t.path.startsWith(folderPath))
+        if (!remaining.find(t => t.path === activeTabPath)) setActiveTabPath(remaining[0]?.path ?? null)
+        return remaining
+      })
+    }
+    return result
+  }, [activeTabPath])
+
+  // ─── Tab courant ──────────────────────────────────────────────────────────
+  const activeTab = tabs.find(t => t.path === activeTabPath) ?? null
+
+  return (
+    <VaultContext.Provider value={{
+      // vault
+      vaultPath, vaultName, tree, vaultFiles, openVault,
+      // onglets
+      tabs, activeTab, activeTabPath, openTab, closeTab, setActiveTab,
+      updateTabContent, markTabSaved,
+      // navigation
+      openFileByPath, openFileByName,
+      canBack, canForward, navigateBack, navigateForward,
+      // backlinks
+      backlinks,
+      // tags
+      allTags,
+      // CRUD
+      createFile, createFolder, renameFile, deleteFile, deleteFolder,
+      // utils
+      parseFrontmatter,
+    }}>
+      {children}
+    </VaultContext.Provider>
+  )
+}
+
+export function useVault() {
+  const ctx = useContext(VaultContext)
+  if (!ctx) throw new Error('useVault must be used inside VaultProvider')
+  return ctx
+}

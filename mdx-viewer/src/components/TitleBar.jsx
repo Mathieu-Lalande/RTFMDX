@@ -36,7 +36,7 @@ const MODE_CONFIG = [
   }
 ]
 
-export default function TitleBar({ fileName, isDirty, onSave, onOpen, saveStatus, mode, onModeChange }) {
+export default function TitleBar({ fileName, isDirty, onSave, onOpen, saveStatus, mode, onModeChange, canBack, canForward, onBack, onForward, onOpenPalette, onOpenSearch }) {
   const [isMaximized, setIsMaximized] = useState(false)
 
   useEffect(() => {
@@ -69,6 +69,22 @@ export default function TitleBar({ fileName, isDirty, onSave, onOpen, saveStatus
           fontSize: '11px', fontWeight: '700', color: 'white'
         }}>M</div>
         <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: '500' }}>MDX</span>
+      </div>
+
+      {/* Navigation ←→ + Recherche + Palette */}
+      <div style={{ display: 'flex', gap: '2px', WebkitAppRegion: 'no-drag', flexShrink: 0, marginRight: '4px' }}>
+        <NavBtn onClick={onBack} disabled={!canBack} title="Précédent (Alt+←)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </NavBtn>
+        <NavBtn onClick={onForward} disabled={!canForward} title="Suivant (Alt+→)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </NavBtn>
+        <NavBtn onClick={onOpenSearch} title="Recherche (Ctrl+F)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </NavBtn>
+        <NavBtn onClick={onOpenPalette} title="Palette (Ctrl+P)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </NavBtn>
       </div>
 
       {/* Actions fichier */}
@@ -172,6 +188,23 @@ function ModeButton({ active, onClick, title, icon, label }) {
       {icon}
       <span>{label}</span>
     </button>
+  )
+}
+
+function NavBtn({ children, onClick, disabled, title }) {
+  return (
+    <button onClick={onClick} title={title} disabled={disabled} style={{
+      background: 'transparent', border: 'none',
+      color: disabled ? 'var(--text-muted)' : 'var(--text-secondary)',
+      cursor: disabled ? 'default' : 'pointer',
+      padding: '5px 7px', borderRadius: '5px',
+      display: 'flex', alignItems: 'center',
+      opacity: disabled ? 0.35 : 1,
+      transition: 'all 0.15s', WebkitAppRegion: 'no-drag',
+    }}
+      onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = disabled ? 'var(--text-muted)' : 'var(--text-secondary)' }}
+    >{children}</button>
   )
 }
 

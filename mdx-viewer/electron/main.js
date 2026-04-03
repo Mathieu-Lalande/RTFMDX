@@ -1,16 +1,101 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, shell, protocol } = require('electron')
 const fs = require('fs')
 const path = require('path')
 
-// MDX compilation — runs in Node.js context (main process) to avoid ESM/CJS issues in browser
-let compileMDX = null
+// Protocole vault:// pour servir les images et assets locaux
+app.whenReady().then(() => {}).catch(() => {})
+// (enregistré dans createWindow via protocol.registerFileProtocol)
+
+// ─── Config persistence ────────────────────────────────────────────────────
+const configPath = () => path.join(app.getPath('userData'), 'config.json')
+function loadConfig() {
+  try { return JSON.parse(fs.readFileSync(configPath(), 'utf-8')) } catch { return {} }
+}
+function saveConfig(data) {
+  try { fs.writeFileSync(configPath(), JSON.stringify(data, null, 2)) } catch {}
+}
+
+// ─── Vault state ───────────────────────────────────────────────────────────
+let vaultPath = null
+let vaultWatcher = null
+
+function getVaultTree(dir) {
+  const IGNORE = new Set(['node_modules', '.git', '.vite', 'dist', 'dist-electron'])
+  const entries = fs.readdirSync(dir, { withFileTypes: true })
+    .filter(e => !e.name.startsWith('.') && !IGNORE.has(e.name))
+    .sort((a, b) => {
+      if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+
+  return entries.map(e => {
+    const fullPath = path.join(dir, e.name)
+    if (e.isDirectory()) {
+      return { type: 'dir', name: e.name, path: fullPath, children: getVaultTree(fullPath) }
+    }
+    if (/\.(mdx?|md)$/i.test(e.name)) {
+      return { type: 'file', name: e.name, path: fullPath }
+    }
+    return null
+  }).filter(Boolean)
+}
+
+function getAllFiles(dir) {
+  const results = []
+  function walk(node) {
+    if (node.type === 'file') results.push(node)
+    if (node.type === 'dir') node.children.forEach(walk)
+  }
+  getVaultTree(dir).forEach(walk)
+  return results
+}
+
+function watchVault(win) {
+  if (vaultWatcher) { vaultWatcher.close(); vaultWatcher = null }
+  if (!vaultPath) return
+  let debounce = null
+  vaultWatcher = fs.watch(vaultPath, { recursive: true }, () => {
+    clearTimeout(debounce)
+    debounce = setTimeout(() => {
+      if (fs.existsSync(vaultPath)) {
+        win.webContents.send('vault-changed', getVaultTree(vaultPath))
+      }
+    }, 300)
+  })
+}
+
+// ─── MDX compilation ───────────────────────────────────────────────────────
+let _compile = null
 async function getCompiler() {
-  if (!compileMDX) {
+  if (!_compile) {
     const { compile } = await import('@mdx-js/mdx')
     const { default: remarkGfm } = await import('remark-gfm')
     const { default: rehypeSlug } = await import('rehype-slug')
-    compileMDX = async (source) => {
-      const result = await compile(source, {
+    _compile = async (source, filePath) => {
+      // Strip frontmatter avant compilation
+      let body = source.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '')
+
+      // Wiki links [[filename]] → <WikiLink href="filename">label</WikiLink>
+      body = body.replace(
+        /\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g,
+        (_, href, label) => `<WikiLink href="${href.trim()}">${(label || href).trim()}</WikiLink>`
+      )
+
+      // Images relatives → vault:// protocol pour Electron
+      if (filePath && vaultPath) {
+        const dir = path.dirname(filePath)
+        body = body.replace(
+          /!\[([^\]]*)\]\((?!https?:\/\/|vault:\/\/)([^)]+)\)/g,
+          (_, alt, src) => {
+            const abs = path.isAbsolute(src)
+              ? src
+              : path.resolve(dir, src)
+            return `![${alt}](vault://${abs.replace(/\\/g, '/')})`
+          }
+        )
+      }
+
+      const result = await compile(body, {
         outputFormat: 'function-body',
         development: false,
         remarkPlugins: [remarkGfm],
@@ -19,209 +104,261 @@ async function getCompiler() {
       return String(result)
     }
   }
-  return compileMDX
+  return _compile
 }
 
-let mainWindow
+// ─── App setup ─────────────────────────────────────────────────────────────
+let mainWindow = null
 let openFilePath = null
 
-// Fix GPU shader cache permission errors on Windows
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 
-// File passed as argument (double-click in Windows Explorer)
-const argFile = process.argv.find(a => a.endsWith('.mdx') || a.endsWith('.md'))
-if (argFile && fs.existsSync(argFile)) {
-  openFilePath = argFile
-}
+const argFile = process.argv.find(a => /\.(mdx?|md)$/i.test(a))
+if (argFile && fs.existsSync(argFile)) openFilePath = argFile
 
 function createWindow() {
+  // Protocole vault:// pour servir les assets locaux (images, etc.)
+  if (!protocol.isProtocolRegistered('vault')) {
+    protocol.registerFileProtocol('vault', (request, callback) => {
+      const filePath = decodeURIComponent(request.url.replace('vault://', ''))
+      callback({ path: filePath })
+    })
+  }
+
   mainWindow = new BrowserWindow({
-    width: 1600,
-    height: 950,
-    minWidth: 900,
-    minHeight: 600,
-    frame: false,
-    titleBarStyle: 'hidden',
-    backgroundColor: '#0f1117',
+    width: 1600, height: 950, minWidth: 900, minHeight: 600,
+    frame: false, titleBarStyle: 'hidden', backgroundColor: '#0f1117',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false
+      contextIsolation: true, nodeIntegration: false
     }
   })
-
-  const devUrl = 'http://localhost:5173'
   const prodUrl = `file://${path.join(__dirname, '../dist/index.html')}`
-
   mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL || prodUrl)
-
-  // DevTools en mode dev
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.webContents.openDevTools({ mode: 'detach' })
   }
-
-  // Ouvre les liens externes dans le navigateur système
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
   })
+  mainWindow.on('closed', () => { mainWindow = null })
 }
 
+// ─── IPC handlers ──────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   createWindow()
 
-  // Compile MDX dans le processus principal (Node.js) et retourne le code compilé
-  ipcMain.handle('compile-mdx', async (_, source) => {
+  // MDX compilation (source + chemin du fichier courant pour résoudre les images)
+  ipcMain.handle('compile-mdx', async (_, source, filePath) => {
     try {
       const compile = await getCompiler()
-      const code = await compile(source)
+      const code = await compile(source, filePath || null)
       return { ok: true, code }
-    } catch (e) {
-      return { ok: false, error: e.message }
-    }
+    } catch (e) { return { ok: false, error: e.message } }
   })
 
-  // Fournit le fichier initial à React
-  ipcMain.handle('get-file', () => {
-    if (openFilePath && fs.existsSync(openFilePath)) {
-      return {
-        path: openFilePath,
-        content: fs.readFileSync(openFilePath, 'utf-8'),
-        name: path.basename(openFilePath)
+  // Recherche full-text dans le vault
+  ipcMain.handle('search-vault', async (_, query) => {
+    if (!vaultPath || !query.trim()) return []
+    const q = query.toLowerCase()
+    const results = []
+    function searchTree(nodes) {
+      for (const node of nodes) {
+        if (node.type === 'file') {
+          try {
+            const content = fs.readFileSync(node.path, 'utf-8')
+            const lines = content.split('\n')
+            lines.forEach((line, i) => {
+              if (line.toLowerCase().includes(q)) {
+                results.push({
+                  path: node.path,
+                  name: node.name,
+                  line: i + 1,
+                  snippet: line.trim().slice(0, 120)
+                })
+              }
+            })
+          } catch {}
+        } else if (node.type === 'dir') {
+          searchTree(node.children)
+        }
       }
     }
-    return {
-      path: null,
-      name: 'Nouveau fichier',
-      content: `# Bienvenue dans MDX Viewer
-
-Ceci est un éditeur **MDX** — Markdown avec des composants React.
-
-## Fonctionnalités
-
-- Rendu live en temps réel
-- Composants personnalisés
-- Syntax highlighting
-
-## Composants disponibles
-
-<Callout type="info">
-  Utilisez les composants directement dans votre Markdown.
-</Callout>
-
-<Callout type="warning">
-  Ceci est un avertissement important.
-</Callout>
-
-<Callout type="danger">
-  Action irréversible — soyez prudent !
-</Callout>
-
-## Étapes d'exemple
-
-<Steps>
-  - Ouvrez un fichier **.mdx** depuis l'explorateur
-  - Éditez à gauche, le rendu se met à jour à droite
-  - **Ctrl+S** pour sauvegarder
-</Steps>
-
-## Code
-
-\`\`\`javascript
-function hello(name) {
-  return \`Bonjour, \${name} !\`
-}
-\`\`\`
-
-> **Note :** Double-cliquez sur n'importe quel fichier \`.mdx\` pour l'ouvrir directement.
-`
-    }
+    searchTree(getVaultTree(vaultPath))
+    return results.slice(0, 100)
   })
 
-  // Sauvegarde
-  ipcMain.handle('save-file', (_, { path: p, content }) => {
+  // ── Vault ──────────────────────────────────────────────────────────────
+  ipcMain.handle('open-vault', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory'],
+      title: 'Ouvrir un vault MDX'
+    })
+    if (result.canceled || !result.filePaths[0]) return { ok: false }
+    vaultPath = result.filePaths[0]
+    saveConfig({ ...loadConfig(), vaultPath })
+    watchVault(mainWindow)
+    return { ok: true, vaultPath, tree: getVaultTree(vaultPath) }
+  })
+
+  ipcMain.handle('get-vault', () => {
+    const cfg = loadConfig()
+    if (cfg.vaultPath && fs.existsSync(cfg.vaultPath)) {
+      vaultPath = cfg.vaultPath
+      watchVault(mainWindow)
+      return { ok: true, vaultPath, tree: getVaultTree(vaultPath) }
+    }
+    return { ok: false }
+  })
+
+  ipcMain.handle('get-vault-tree', () => {
+    if (!vaultPath) return { ok: false }
+    return { ok: true, tree: getVaultTree(vaultPath) }
+  })
+
+  ipcMain.handle('read-vault-file', (_, filePath) => {
     try {
-      if (!p) return { ok: false, error: 'Pas de chemin défini' }
-      fs.writeFileSync(p, content, 'utf-8')
+      return { ok: true, content: fs.readFileSync(filePath, 'utf-8'), name: path.basename(filePath), path: filePath }
+    } catch (e) { return { ok: false, error: e.message } }
+  })
+
+  ipcMain.handle('create-file', async (_, { dir, name }) => {
+    try {
+      const base = name.endsWith('.mdx') || name.endsWith('.md') ? name : `${name}.mdx`
+      const filePath = path.join(dir || vaultPath, base)
+      if (fs.existsSync(filePath)) return { ok: false, error: 'Ce fichier existe déjà' }
+      fs.writeFileSync(filePath, `# ${name.replace(/\.(mdx?|md)$/, '')}\n\n`, 'utf-8')
+      return { ok: true, path: filePath, name: base, content: fs.readFileSync(filePath, 'utf-8') }
+    } catch (e) { return { ok: false, error: e.message } }
+  })
+
+  ipcMain.handle('create-folder', async (_, { dir, name }) => {
+    try {
+      const folderPath = path.join(dir || vaultPath, name)
+      if (fs.existsSync(folderPath)) return { ok: false, error: 'Ce dossier existe déjà' }
+      fs.mkdirSync(folderPath, { recursive: true })
+      return { ok: true, path: folderPath }
+    } catch (e) { return { ok: false, error: e.message } }
+  })
+
+  ipcMain.handle('rename-file', async (_, { oldPath, newName }) => {
+    try {
+      const dir = path.dirname(oldPath)
+      const ext = path.extname(oldPath)
+      const base = newName.includes('.') ? newName : newName + ext
+      const newPath = path.join(dir, base)
+      fs.renameSync(oldPath, newPath)
+      return { ok: true, newPath, newName: base }
+    } catch (e) { return { ok: false, error: e.message } }
+  })
+
+  ipcMain.handle('delete-file', async (_, filePath) => {
+    try {
+      await shell.trashItem(filePath)
       return { ok: true }
     } catch (e) {
-      return { ok: false, error: e.message }
+      try { fs.unlinkSync(filePath); return { ok: true } }
+      catch (e2) { return { ok: false, error: e2.message } }
     }
   })
 
-  // Sauvegarde sous
-  ipcMain.handle('save-file-as', async (_, { content }) => {
+  ipcMain.handle('delete-folder', async (_, folderPath) => {
+    try {
+      await shell.trashItem(folderPath)
+      return { ok: true }
+    } catch (e) {
+      try { fs.rmSync(folderPath, { recursive: true }); return { ok: true } }
+      catch (e2) { return { ok: false, error: e2.message } }
+    }
+  })
+
+  ipcMain.handle('resolve-wiki-link', (_, name) => {
+    if (!vaultPath) return null
+    const all = getAllFiles(vaultPath)
+    const found = all.find(f => {
+      const base = path.basename(f.path, path.extname(f.path))
+      return base.toLowerCase() === name.toLowerCase() || f.name.toLowerCase() === name.toLowerCase()
+    })
+    return found ? found.path : null
+  })
+
+  ipcMain.handle('get-vault-files', () => {
+    if (!vaultPath) return []
+    return getAllFiles(vaultPath).map(f => ({
+      name: path.basename(f.path, path.extname(f.path)),
+      path: f.path
+    }))
+  })
+
+  // ── Fichier seul (sans vault) ──────────────────────────────────────────
+  ipcMain.handle('get-file', () => {
+    if (openFilePath && fs.existsSync(openFilePath)) {
+      return { path: openFilePath, content: fs.readFileSync(openFilePath, 'utf-8'), name: path.basename(openFilePath) }
+    }
+    return { path: null, name: 'Nouveau fichier', content: '# Bienvenue\n\nOuvrez un **vault** ou un fichier `.mdx`.\n' }
+  })
+
+  ipcMain.handle('save-file', (_, { path: p, content }) => {
+    try {
+      if (!p) return { ok: false, error: 'Pas de chemin' }
+      fs.writeFileSync(p, content, 'utf-8')
+      return { ok: true }
+    } catch (e) { return { ok: false, error: e.message } }
+  })
+
+  ipcMain.handle('save-file-as', async (_, { content, dir }) => {
     const result = await dialog.showSaveDialog(mainWindow, {
       filters: [{ name: 'MDX', extensions: ['mdx'] }, { name: 'Markdown', extensions: ['md'] }],
-      defaultPath: 'nouveau.mdx'
+      defaultPath: path.join(dir || vaultPath || app.getPath('documents'), 'nouveau.mdx')
     })
     if (!result.canceled && result.filePath) {
       fs.writeFileSync(result.filePath, content, 'utf-8')
-      openFilePath = result.filePath
       return { ok: true, path: result.filePath, name: path.basename(result.filePath) }
     }
     return { ok: false }
   })
 
-  // Ouvrir un fichier
   ipcMain.handle('open-file', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
-      filters: [
-        { name: 'MDX / Markdown', extensions: ['mdx', 'md'] },
-        { name: 'Tous les fichiers', extensions: ['*'] }
-      ],
+      filters: [{ name: 'MDX / Markdown', extensions: ['mdx', 'md'] }],
       properties: ['openFile']
     })
     if (!result.canceled && result.filePaths[0]) {
       const p = result.filePaths[0]
-      openFilePath = p
-      return {
-        ok: true,
-        path: p,
-        name: path.basename(p),
-        content: fs.readFileSync(p, 'utf-8')
-      }
+      return { ok: true, path: p, name: path.basename(p), content: fs.readFileSync(p, 'utf-8') }
     }
     return { ok: false }
   })
 
-  // Contrôles fenêtre (titlebar custom)
-  ipcMain.handle('window-minimize', () => mainWindow.minimize())
+  // ── Fenêtre ────────────────────────────────────────────────────────────
+  ipcMain.handle('window-minimize', () => mainWindow?.minimize())
   ipcMain.handle('window-maximize', () => {
-    if (mainWindow.isMaximized()) mainWindow.unmaximize()
-    else mainWindow.maximize()
+    if (mainWindow?.isMaximized()) mainWindow.unmaximize()
+    else mainWindow?.maximize()
   })
-  ipcMain.handle('window-close', () => mainWindow.close())
-  ipcMain.handle('window-is-maximized', () => mainWindow.isMaximized())
+  ipcMain.handle('window-close', () => mainWindow?.close())
+  ipcMain.handle('window-is-maximized', () => mainWindow?.isMaximized() ?? false)
 })
 
-// Instance unique — si l'app est déjà ouverte et qu'on double-clique sur un .mdx,
-// on envoie le fichier à la fenêtre existante plutôt que d'en ouvrir une deuxième
+// ─── Instance unique ───────────────────────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
 } else {
   app.on('second-instance', (_, argv) => {
-    const file = argv.find(a => a.endsWith('.mdx') || a.endsWith('.md'))
+    const file = argv.find(a => /\.(mdx?|md)$/i.test(a))
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.focus()
       if (file && fs.existsSync(file)) {
         mainWindow.webContents.send('open-file', {
-          path: file,
-          name: path.basename(file),
-          content: fs.readFileSync(file, 'utf-8')
+          path: file, name: path.basename(file), content: fs.readFileSync(file, 'utf-8')
         })
       }
     }
   })
 }
 
-// macOS : rouvre si on clique sur l'icône
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow()
-})
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
-})
+app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
