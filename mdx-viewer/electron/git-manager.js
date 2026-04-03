@@ -1,6 +1,19 @@
 const fs = require('fs')
 const path = require('path')
-const { execSync } = require('child_process')
+const { spawnSync } = require('child_process')
+
+/**
+ * Lance une commande git de façon sécurisée (pas de shell, args en tableau).
+ * @param {string[]} args - Arguments git (ex: ['config', '--get', 'remote.origin.url'])
+ * @param {string} cwd - Répertoire de travail
+ * @returns {{ stdout: string, error: Error | null }}
+ */
+function git(args, cwd) {
+  const result = spawnSync('git', args, { cwd, encoding: 'utf-8', timeout: 5000 })
+  if (result.error) return { stdout: '', error: result.error }
+  if (result.status !== 0) return { stdout: '', error: new Error(result.stderr?.trim() || `git exited with code ${result.status}`) }
+  return { stdout: result.stdout.trim(), error: null }
+}
 
 class GitManager {
   constructor() {
@@ -27,9 +40,9 @@ class GitManager {
     try {
       if (!this.isGitRepo(dir)) return null
 
-      const remoteUrl = execSync(`cd "${dir}" && git config --get remote.origin.url`, { encoding: 'utf-8' }).trim()
-      const branch = execSync(`cd "${dir}" && git rev-parse --abbrev-ref HEAD`, { encoding: 'utf-8' }).trim()
-      const status = execSync(`cd "${dir}" && git status --porcelain`, { encoding: 'utf-8' }).trim()
+      const remoteUrl = git(['config', '--get', 'remote.origin.url'], dir).stdout
+      const branch = git(['rev-parse', '--abbrev-ref', 'HEAD'], dir).stdout
+      const status = git(['status', '--porcelain'], dir).stdout
 
       return {
         isGit: true,
@@ -69,7 +82,7 @@ class GitManager {
   }
 
   /**
-   * Récupère les fichiers .md ET .mdx du repo
+   * Récupère les fichiers .md ET .mxt du repo
    */
   getMarkdownFiles(dir = this.gitPath) {
     if (!dir || !fs.existsSync(dir)) return []
@@ -83,7 +96,7 @@ class GitManager {
         const fullPath = path.join(current, entry.name)
         if (entry.isDirectory()) {
           walk(fullPath)
-        } else if (/\.(md|mdx)$/i.test(entry.name)) {
+        } else if (/\.(md|mxt)$/i.test(entry.name)) {
           results.push({
             name: entry.name,
             path: fullPath,

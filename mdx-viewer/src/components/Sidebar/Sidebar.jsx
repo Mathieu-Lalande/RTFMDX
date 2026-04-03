@@ -91,7 +91,7 @@ export default function Sidebar({ activeFilePath, width, onResizeStart }) {
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
             </svg>
             <p style={{ color: 'var(--text-muted)', fontSize: '12px', lineHeight: 1.6, marginBottom: '12px' }}>
-              Ouvrez un dossier comme vault pour gérer vos fichiers MDX.
+              Ouvrez un dossier comme vault pour gérer vos fichiers.
             </p>
             <button onClick={openVault} style={{
               padding: '7px 14px', background: 'var(--accent-soft)',

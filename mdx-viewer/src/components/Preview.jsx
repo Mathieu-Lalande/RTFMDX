@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import * as runtime from 'react/jsx-runtime'
-import { Callout } from './mdx/Callout.jsx'
-import { Steps } from './mdx/Steps.jsx'
-import { CodeBlock } from './mdx/CodeBlock.jsx'
-import { Badge } from './mdx/Badge.jsx'
-import { Card, CardGrid } from './mdx/Card.jsx'
-import { Tabs, Tab } from './mdx/Tabs.jsx'
-import { WikiLink } from './mdx/WikiLink.jsx'
+import { Callout } from './mxt/Callout.jsx'
+import { Steps } from './mxt/Steps.jsx'
+import { CodeBlock } from './mxt/CodeBlock.jsx'
+import { Badge } from './mxt/Badge.jsx'
+import { Card, CardGrid } from './mxt/Card.jsx'
+import { Tabs, Tab } from './mxt/Tabs.jsx'
+import { WikiLink } from './mxt/WikiLink.jsx'
 import { useVault } from '../context/VaultContext.jsx'
 
 const COMPONENTS = {
@@ -77,14 +77,14 @@ export default function Preview({ source, filePath, frontmatter, readOnly, zoom 
   useEffect(() => {
     let cancelled = false
     async function render() {
-      const result = await window.electron.compileMdx(debouncedSource, filePath)
+      const result = await window.electron.compileMxt(debouncedSource, filePath)
       if (cancelled) return
       if (!result.ok) { setError(result.error); return }
       try {
         // eslint-disable-next-line no-new-func
         const fn = new Function(result.code)
-        const { default: MDXContent } = fn(runtime)
-        setContent(<MDXContent components={COMPONENTS} />)
+        const { default: MXTContent } = fn(runtime)
+        setContent(<MXTContent components={COMPONENTS} />)
         setError(null)
       } catch (e) { setError(e.message) }
     }
@@ -123,7 +123,7 @@ export default function Preview({ source, filePath, frontmatter, readOnly, zoom 
               borderRadius: 'var(--radius)', color: '#f87171',
               fontFamily: 'var(--font-mono)', fontSize: '13px', lineHeight: 1.6,
             }}>
-              <strong style={{ color: '#ef4444', display: 'block', marginBottom: '0.5rem' }}>Erreur MDX</strong>
+              <strong style={{ color: '#ef4444', display: 'block', marginBottom: '0.5rem' }}>Erreur MXT</strong>
               {error}
             </div>
           ) : (

@@ -167,7 +167,7 @@ function DirItem({ node, depth, activeFilePath, creating, setCreating }) {
             <div style={{ padding: `3px 6px 3px ${6 + (depth + 1) * 14}px`, display: 'flex', alignItems: 'center', gap: '5px' }}>
               <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{creating.type === 'folder' ? <IcoFolder /> : <IcoFile />}</span>
               <InlineInput
-                placeholder={creating.type === 'folder' ? 'Nom du dossier...' : 'nom-fichier.mdx'}
+                placeholder={creating.type === 'folder' ? 'Nom du dossier...' : 'nom-fichier.mxt'}
                 onConfirm={async (name) => {
                   if (creating.type === 'folder') await createFolder({ dir: node.path, name })
                   else await createFile({ dir: node.path, name })
@@ -194,7 +194,7 @@ function FileItem({ node, depth, activeFilePath }) {
   const [menu, setMenu] = useState(null)
   const isActive = node.path === activeFilePath
   const indent = depth * 14
-  const label = node.name.replace(/\.(mdx?|md)$/, '')
+  const label = node.name.replace(/\.(mxt|md)$/, '')
 
   const handleContextMenu = (e) => {
     e.preventDefault(); e.stopPropagation()
@@ -258,7 +258,7 @@ export default function FileTree({ activeFilePath, creating, setCreating }) {
         <div style={{ padding: '3px 6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
           <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{creating.type === 'folder' ? <IcoFolder /> : <IcoFile />}</span>
           <InlineInput
-            placeholder={creating.type === 'folder' ? 'Nom du dossier...' : 'nom-fichier.mdx'}
+            placeholder={creating.type === 'folder' ? 'Nom du dossier...' : 'nom-fichier.mxt'}
             onConfirm={async (name) => {
               if (creating.type === 'folder') await createFolder({ name })
               else await createFile({ name })

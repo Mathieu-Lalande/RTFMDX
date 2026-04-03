@@ -9,9 +9,7 @@ try {
   autoUpdater = require('electron-updater').autoUpdater
 } catch {}
 
-// Protocole vault:// pour servir les images et assets locaux
-app.whenReady().then(() => {}).catch(() => {})
-// (enregistré dans createWindow via protocol.registerFileProtocol)
+// Protocole vault:// enregistré dans createWindow via protocol.registerFileProtocol
 
 // ─── Config persistence ────────────────────────────────────────────────────
 const configPath = () => path.join(app.getPath('userData'), 'config.json')
@@ -40,7 +38,7 @@ function getVaultTree(dir) {
     if (e.isDirectory()) {
       return { type: 'dir', name: e.name, path: fullPath, children: getVaultTree(fullPath) }
     }
-    if (/\.(mdx?|md)$/i.test(e.name)) {
+    if (/\.(md|mxt)$/i.test(e.name)) {
       return { type: 'file', name: e.name, path: fullPath }
     }
     return null
@@ -71,7 +69,7 @@ function watchVault(win) {
   })
 }
 
-// ─── MDX compilation ───────────────────────────────────────────────────────
+// ─── MXT compilation ───────────────────────────────────────────────────────
 let _compile = null
 async function getCompiler() {
   if (!_compile) {
@@ -120,7 +118,7 @@ let openFilePath = null
 
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 
-const argFile = process.argv.find(a => /\.(mdx?|md)$/i.test(a))
+const argFile = process.argv.find(a => /\.(md|mxt)$/i.test(a))
 if (argFile && fs.existsSync(argFile)) openFilePath = argFile
 
 function createWindow() {
@@ -174,8 +172,8 @@ app.whenReady().then(() => {
     } catch {}
   }
 
-  // MDX compilation (source + chemin du fichier courant pour résoudre les images)
-  ipcMain.handle('compile-mdx', async (_, source, filePath) => {
+  // MXT compilation (source + chemin du fichier courant pour résoudre les images)
+  ipcMain.handle('compile-mxt', async (_, source, filePath) => {
     try {
       const compile = await getCompiler()
       const code = await compile(source, filePath || null)
@@ -183,34 +181,31 @@ app.whenReady().then(() => {
     } catch (e) { return { ok: false, error: e.message } }
   })
 
-  // Recherche full-text dans le vault
+  // Recherche full-text dans le vault (async par batch pour éviter de bloquer le thread)
   ipcMain.handle('search-vault', async (_, query) => {
     if (!vaultPath || !query.trim()) return []
     const q = query.toLowerCase()
+    const files = getAllFiles(vaultPath)
     const results = []
-    function searchTree(nodes) {
-      for (const node of nodes) {
-        if (node.type === 'file') {
-          try {
-            const content = fs.readFileSync(node.path, 'utf-8')
-            const lines = content.split('\n')
-            lines.forEach((line, i) => {
-              if (line.toLowerCase().includes(q)) {
-                results.push({
-                  path: node.path,
-                  name: node.name,
-                  line: i + 1,
-                  snippet: line.trim().slice(0, 120)
-                })
-              }
-            })
-          } catch {}
-        } else if (node.type === 'dir') {
-          searchTree(node.children)
-        }
-      }
+    const BATCH = 20
+
+    for (let i = 0; i < files.length && results.length < 100; i += BATCH) {
+      const batch = files.slice(i, i + BATCH)
+      const batchResults = await Promise.all(batch.map(async (node) => {
+        try {
+          const content = await fs.promises.readFile(node.path, 'utf-8')
+          const hits = []
+          content.split('\n').forEach((line, idx) => {
+            if (line.toLowerCase().includes(q)) {
+              hits.push({ path: node.path, name: node.name, line: idx + 1, snippet: line.trim().slice(0, 120) })
+            }
+          })
+          return hits
+        } catch { return [] }
+      }))
+      results.push(...batchResults.flat())
     }
-    searchTree(getVaultTree(vaultPath))
+
     return results.slice(0, 100)
   })
 
@@ -232,7 +227,7 @@ app.whenReady().then(() => {
   ipcMain.handle('open-vault', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory'],
-      title: 'Ouvrir un vault MDX'
+      title: 'Ouvrir un vault'
     })
     if (result.canceled || !result.filePaths[0]) return { ok: false }
     vaultPath = result.filePaths[0]
@@ -276,10 +271,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle('create-file', async (_, { dir, name }) => {
     try {
-      const base = name.endsWith('.mdx') || name.endsWith('.md') ? name : `${name}.mdx`
+      const base = /\.(md|mxt)$/.test(name) ? name : `${name}.mxt`
       const filePath = path.join(dir || vaultPath, base)
       if (fs.existsSync(filePath)) return { ok: false, error: 'Ce fichier existe déjà' }
-      fs.writeFileSync(filePath, `# ${name.replace(/\.(mdx?|md)$/, '')}\n\n`, 'utf-8')
+      fs.writeFileSync(filePath, `# ${name.replace(/\.(mxt|md)$/, '')}\n\n`, 'utf-8')
       return { ok: true, path: filePath, name: base, content: fs.readFileSync(filePath, 'utf-8') }
     } catch (e) { return { ok: false, error: e.message } }
   })
@@ -363,12 +358,12 @@ app.whenReady().then(() => {
   ipcMain.handle('get-builtin-example', () => {
     try {
       const examplePath = app.isPackaged
-        ? path.join(process.resourcesPath, 'exemple.mdx')
-        : path.join(__dirname, '../../exemple.mdx')
+        ? path.join(process.resourcesPath, 'exemple.mxt')
+        : path.join(__dirname, '../../exemple.mxt')
       if (!fs.existsSync(examplePath)) {
         return { ok: false, error: 'Fichier exemple introuvable' }
       }
-      return { ok: true, content: fs.readFileSync(examplePath, 'utf-8'), name: 'exemple.mdx', path: '__builtin__:exemple' }
+      return { ok: true, content: fs.readFileSync(examplePath, 'utf-8'), name: 'exemple.mxt', path: '__builtin__:exemple' }
     } catch (e) { return { ok: false, error: e.message } }
   })
 
@@ -377,7 +372,7 @@ app.whenReady().then(() => {
     if (openFilePath && fs.existsSync(openFilePath)) {
       return { path: openFilePath, content: fs.readFileSync(openFilePath, 'utf-8'), name: path.basename(openFilePath) }
     }
-    return { path: null, name: 'Nouveau fichier', content: '# Bienvenue\n\nOuvrez un **vault** ou un fichier `.mdx`.\n' }
+    return { path: null, name: 'Nouveau fichier', content: '# Bienvenue\n\nOuvrez un **vault** ou un fichier `.mxt` / `.md`.\n' }
   })
 
   ipcMain.handle('save-file', (_, { path: p, content }) => {
@@ -390,8 +385,8 @@ app.whenReady().then(() => {
 
   ipcMain.handle('save-file-as', async (_, { content, dir }) => {
     const result = await dialog.showSaveDialog(mainWindow, {
-      filters: [{ name: 'MDX', extensions: ['mdx'] }, { name: 'Markdown', extensions: ['md'] }],
-      defaultPath: path.join(dir || vaultPath || app.getPath('documents'), 'nouveau.mdx')
+      filters: [{ name: 'MXT', extensions: ['mxt'] }, { name: 'Markdown', extensions: ['md'] }],
+      defaultPath: path.join(dir || vaultPath || app.getPath('documents'), 'nouveau.mxt')
     })
     if (!result.canceled && result.filePath) {
       fs.writeFileSync(result.filePath, content, 'utf-8')
@@ -402,7 +397,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('open-file', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
-      filters: [{ name: 'MDX / Markdown', extensions: ['mdx', 'md'] }],
+      filters: [{ name: 'Fichiers texte', extensions: ['mxt', 'md'] }],
       properties: ['openFile']
     })
     if (!result.canceled && result.filePaths[0]) {
@@ -474,7 +469,7 @@ if (!gotLock) {
   app.quit()
 } else {
   app.on('second-instance', (_, argv) => {
-    const file = argv.find(a => /\.(mdx?|md)$/i.test(a))
+    const file = argv.find(a => /\.(mxt|md)$/i.test(a))
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.focus()

@@ -16,8 +16,8 @@ interface VaultNode {
 declare global {
   interface Window {
     electron: {
-      // MDX
-      compileMdx: (source: string, filePath?: string) => Promise<{ ok: boolean; code?: string; error?: string }>
+      // MXT
+      compileMxt: (source: string, filePath?: string) => Promise<{ ok: boolean; code?: string; error?: string }>
       searchVault: (query: string) => Promise<Array<{ path: string; name: string; line: number; snippet: string }>>
 
       // Config

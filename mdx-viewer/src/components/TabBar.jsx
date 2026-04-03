@@ -14,7 +14,7 @@ export default function TabBar() {
     }}>
       {tabs.map(tab => {
         const isActive = tab.path === activeTabPath
-        const label = tab.name.replace(/\.(mdx?|md)$/, '')
+        const label = tab.name.replace(/\.(mxt|md)$/, '')
         return (
           <div
             key={tab.path}

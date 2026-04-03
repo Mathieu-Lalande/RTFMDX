@@ -40,7 +40,8 @@ const MODE_CONFIG = [
 export default function TitleBar({
   fileName, isDirty, onSave, onOpen, saveStatus, mode, onModeChange,
   canBack, canForward, onBack, onForward, onOpenPalette, onOpenSearch,
-  theme, onToggleTheme, onPrint, outlineOpen, onToggleOutline, onOpenGit
+  theme, onToggleTheme, onPrint, outlineOpen, onToggleOutline, onOpenGit,
+  searchReplaceOpen, onToggleSearchReplace
 }) {
   const [isMaximized, setIsMaximized] = useState(false)
 
@@ -73,7 +74,7 @@ export default function TitleBar({
           borderRadius: '5px', display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: '11px', fontWeight: '700', color: 'white'
         }}>M</div>
-        <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: '500' }}>MDX</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: '500' }}>MXT</span>
       </div>
 
       {/* Navigation ←→ + Recherche + Palette */}
@@ -148,6 +149,13 @@ export default function TitleBar({
 
       {/* Extra controls: Outline, Print, Theme */}
       <div style={{ display: 'flex', gap: '2px', WebkitAppRegion: 'no-drag', flexShrink: 0, marginRight: '8px' }}>
+        <NavBtn onClick={onToggleSearchReplace} title="Rechercher & Remplacer" active={searchReplaceOpen}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="10" cy="10" r="7"/>
+            <line x1="15" y1="15" x2="21" y2="21"/>
+            <path d="M14 18h7M18 14v7"/>
+          </svg>
+        </NavBtn>
         <NavBtn onClick={onToggleOutline} title="Plan / Outline (Ctrl+Shift+O)" active={outlineOpen}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <line x1="3" y1="6" x2="21" y2="6"/>

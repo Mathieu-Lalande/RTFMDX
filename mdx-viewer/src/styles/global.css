@@ -68,7 +68,7 @@ body {
   background: var(--text-muted);
 }
 
-/* Styles prose pour le rendu MDX */
+/* Styles prose pour le rendu MXT */
 .prose {
   user-select: text;
   color: var(--text-primary);

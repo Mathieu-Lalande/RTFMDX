@@ -1,7 +1,7 @@
 {
-  "name": "mdx-viewer",
+  "name": "mxt-viewer",
   "version": "1.0.0",
-  "description": "Viewer/éditeur MDX natif Windows",
+  "description": "Viewer/éditeur MXT natif Windows",
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 node scripts/launch-electron.js\"",
@@ -10,8 +10,8 @@
     "start": "node scripts/launch-electron.js"
   },
   "build": {
-    "appId": "com.mdxviewer.app",
-    "productName": "MDX Viewer",
+    "appId": "com.mxtviewer.app",
+    "productName": "MXT Viewer",
     "directories": {
       "output": "dist-electron"
     },
@@ -20,9 +20,15 @@
       "icon": "assets/icon.ico",
       "fileAssociations": [
         {
-          "ext": "mdx",
-          "name": "MDX Document",
-          "description": "Fichier MDX",
+          "ext": "mxt",
+          "name": "MXT Document",
+          "description": "Fichier Markdown eXTended",
+          "icon": "assets/icon.ico"
+        },
+        {
+          "ext": "md",
+          "name": "Markdown",
+          "description": "Fichier Markdown",
           "icon": "assets/icon.ico"
         }
       ]
@@ -38,13 +44,13 @@
       "assets/**/*"
     ],
     "extraResources": [
-      { "from": "../exemple.mdx", "to": "exemple.mdx" },
-      { "from": "../exemple-projet.mdx", "to": "exemple-projet.mdx" }
+      { "from": "../exemple.mxt", "to": "exemple.mxt" },
+      { "from": "../exemple-projet.mxt", "to": "exemple-projet.mxt" }
     ],
     "publish": {
       "provider": "github",
       "owner": "Mathieu-Lalande",
-      "repo": "RTFMDX"
+      "repo": "RTFMXT"
     }
   },
   "dependencies": {

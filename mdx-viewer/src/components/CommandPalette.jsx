@@ -30,6 +30,7 @@ const BUILTIN_COMMANDS = [
   { id: 'new-file',               label: 'Nouveau fichier',           iconId: 'file-new', category: 'Fichier' },
   { id: 'open-vault',             label: 'Ouvrir un vault',           iconId: 'folder',   category: 'Vault' },
   { id: 'save',                   label: 'Sauvegarder',               iconId: 'save',     category: 'Fichier' },
+  { id: 'search-replace',         label: 'Rechercher & Remplacer',    iconId: 'edit',     category: 'Fichier' },
   { id: 'open-builtin-example',   label: "Ouvrir l'exemple intégré",  iconId: 'example',  category: 'Fichier' },
 ]
 
@@ -339,7 +340,7 @@ export default function CommandPalette({ open, onClose, onAction, mode }) {
     const q = query.toLowerCase()
     const files = vaultFiles.map(f => ({
       id: `file:${f.path}`,
-      label: f.name.replace(/\.(mdx?|md)$/, ''),
+      label: f.name.replace(/\.(mxt|md)$/, ''),
       iconId: 'file',
       category: 'Fichiers',
       action: () => openFileByPath(f.path),
@@ -370,7 +371,7 @@ export default function CommandPalette({ open, onClose, onAction, mode }) {
     }))
     const recents = (recentFiles || []).map(r => ({
       id: `recent:${r.path}`,
-      label: r.name.replace(/\.(mdx?|md)$/, ''),
+      label: r.name.replace(/\.(mxt|md)$/, ''),
       subtitle: r.path,
       iconId: 'clock',
       category: 'Récents',

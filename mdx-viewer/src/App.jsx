@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { VaultProvider, useVault } from './context/VaultContext.jsx'
 import Editor from './components/Editor.jsx'
 import Preview from './components/Preview.jsx'
@@ -34,7 +34,7 @@ function BacklinksPanel({ backlinks, onOpen }) {
             <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
           </svg>
-          {b.name.replace(/\.(mdx?|md)$/, '')}
+          {b.name.replace(/\.(mxt|md)$/, '')}
         </div>
       ))}
     </div>
@@ -84,7 +84,7 @@ function SearchPanel({ open, onClose, onOpen }) {
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
               <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--accent-hover)', marginBottom: '3px' }}>
-                {r.name.replace(/\.(mdx?|md)$/, '')} <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}>ligne {r.line}</span>
+                {r.name.replace(/\.(mxt|md)$/, '')} <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}>ligne {r.line}</span>
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {r.snippet}
@@ -93,6 +93,144 @@ function SearchPanel({ open, onClose, onOpen }) {
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── Search & Replace Bar ────────────────────────────────────────────────────
+function SearchReplaceBar({ open, onClose, source, onReplace, isReadOnly }) {
+  const [find, setFind] = useState('')
+  const [replace, setReplace] = useState('')
+  const [currentIdx, setCurrentIdx] = useState(0)
+  const findRef = useRef(null)
+
+  // Calcule toutes les occurrences avec leur position dans le source
+  const matches = useMemo(() => {
+    if (!find.trim()) return []
+    const escaped = find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return [...source.matchAll(new RegExp(escaped, 'gi'))]
+  }, [find, source])
+
+  // Remet le curseur à 0 quand le terme change
+  useEffect(() => { setCurrentIdx(0) }, [find])
+
+  useEffect(() => {
+    if (open) {
+      setFind(''); setReplace(''); setCurrentIdx(0)
+      setTimeout(() => findRef.current?.focus(), 50)
+    }
+  }, [open])
+
+  // Extrait le contexte (ligne) autour du match courant pour l'aperçu
+  const preview = useMemo(() => {
+    const match = matches[currentIdx]
+    if (!match) return null
+    const start = source.lastIndexOf('\n', match.index) + 1
+    const end = source.indexOf('\n', match.index + match[0].length)
+    const line = source.slice(start, end === -1 ? undefined : end).trim()
+    const relIdx = match.index - start
+    return { line, relIdx, matchLen: match[0].length }
+  }, [matches, currentIdx, source])
+
+  const goNext = () => setCurrentIdx(i => (i + 1) % matches.length)
+  const goPrev = () => setCurrentIdx(i => (i - 1 + matches.length) % matches.length)
+
+  const handleReplaceCurrent = () => {
+    const match = matches[currentIdx]
+    if (!match || isReadOnly) return
+    const newSource = source.slice(0, match.index) + replace + source.slice(match.index + match[0].length)
+    onReplace(newSource)
+    // L'index reste le même, le prochain match prendra sa place automatiquement
+  }
+
+  const handleReplaceAll = () => {
+    if (!find.trim() || matches.length === 0 || isReadOnly) return
+    const escaped = find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    onReplace(source.replace(new RegExp(escaped, 'gi'), replace))
+    onClose()
+  }
+
+  const handleKey = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); onClose() }
+    if (e.key === 'Enter' && matches.length > 0) { e.preventDefault(); e.shiftKey ? goPrev() : goNext() }
+  }
+
+  if (!open) return null
+
+  const hasMatches = matches.length > 0
+  const btnBase = { border: '1px solid var(--border)', borderRadius: '4px', fontSize: '11px', padding: '3px 9px', flexShrink: 0, fontFamily: 'var(--font-sans)', cursor: 'pointer' }
+
+  return (
+    <div style={{
+      position: 'fixed', top: '50px', right: '14px', zIndex: 5001,
+      background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+      borderRadius: '8px', padding: '8px 10px',
+      display: 'flex', flexDirection: 'column', gap: '6px',
+      boxShadow: '0 4px 24px rgba(0,0,0,0.4)', minWidth: '320px', maxWidth: '420px',
+    }}>
+
+      {/* Ligne recherche */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" style={{ flexShrink: 0 }}>
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input ref={findRef} value={find} onChange={e => setFind(e.target.value)} onKeyDown={handleKey}
+          placeholder="Rechercher…"
+          style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: '13px', fontFamily: 'var(--font-sans)' }}
+        />
+        {/* Compteur + navigation */}
+        {find && (
+          <span style={{ fontSize: '11px', color: hasMatches ? 'var(--text-muted)' : '#f87171', flexShrink: 0, minWidth: '52px', textAlign: 'right' }}>
+            {hasMatches ? `${currentIdx + 1} / ${matches.length}` : 'Aucun'}
+          </span>
+        )}
+        {hasMatches && (
+          <>
+            <button onClick={goPrev} title="Précédent (Shift+Entrée)" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px 3px', display: 'flex', alignItems: 'center' }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+            </button>
+            <button onClick={goNext} title="Suivant (Entrée)" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px 3px', display: 'flex', alignItems: 'center' }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+          </>
+        )}
+        <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px 4px', display: 'flex', alignItems: 'center' }}>
+          <svg width="11" height="11" viewBox="0 0 10 10" stroke="currentColor" strokeWidth="2"><line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/></svg>
+        </button>
+      </div>
+
+      {/* Aperçu du match courant */}
+      {preview && (
+        <div style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', background: 'var(--bg-tertiary)', borderRadius: '4px', padding: '4px 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {preview.line.slice(0, preview.relIdx)}
+          <mark style={{ background: 'rgba(255,193,7,0.35)', color: 'var(--text-primary)', borderRadius: '2px', padding: '0 1px' }}>
+            {preview.line.slice(preview.relIdx, preview.relIdx + preview.matchLen)}
+          </mark>
+          {preview.line.slice(preview.relIdx + preview.matchLen)}
+        </div>
+      )}
+
+      {/* Ligne remplacement — masquée en lecture seule */}
+      {!isReadOnly && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" style={{ flexShrink: 0 }}>
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+          <input value={replace} onChange={e => setReplace(e.target.value)} onKeyDown={handleKey}
+            placeholder="Remplacer par…"
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: '13px', fontFamily: 'var(--font-sans)' }}
+          />
+          <button onClick={handleReplaceCurrent} disabled={!hasMatches} title="Remplacer cette occurrence"
+            style={{ ...btnBase, background: hasMatches ? 'var(--accent)' : 'var(--bg-tertiary)', color: hasMatches ? 'white' : 'var(--text-muted)', opacity: hasMatches ? 1 : 0.4, fontWeight: '600' }}>
+            Remplacer
+          </button>
+          <button onClick={handleReplaceAll} disabled={!hasMatches} title="Remplacer tout"
+            style={{ ...btnBase, background: 'var(--bg-tertiary)', color: hasMatches ? 'var(--text-secondary)' : 'var(--text-muted)', opacity: hasMatches ? 1 : 0.4 }}>
+            Tout
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -129,6 +267,8 @@ function AppContent() {
   const autoSaveTimerRef = useRef(null)
   const configLoadedRef = useRef(false)
   const contentRef = useRef(null)
+  const previewRef = useRef(null)   // uniquement la zone aperçu (pour DOM highlight)
+  const editorViewRef = useRef(null) // instance CodeMirror EditorView (pour CM selection)
   const findBarRef = useRef(null)
 
   // Load config on startup
@@ -138,7 +278,7 @@ function AppContent() {
       if (cfg.theme) setTheme(cfg.theme)
       if (cfg.autoSave !== undefined) setAutoSaveDelay(cfg.autoSave)
       if (cfg.gitRepoPath) setGitRepoPath(cfg.gitRepoPath)
-    }).catch(() => {})
+    }).catch(err => console.error('[config] Échec du chargement de la config:', err))
     configLoadedRef.current = true
   }, [])
 
@@ -151,7 +291,7 @@ function AppContent() {
   const persistConfigRef = useRef(false)
   useEffect(() => {
     if (!persistConfigRef.current) { persistConfigRef.current = true; return }
-    window.electron.saveConfig({ zoom, theme, autoSave: autoSaveDelay }).catch(() => {})
+    window.electron.saveConfig({ zoom, theme, autoSave: autoSaveDelay }).catch(err => console.error('[config] Échec de la sauvegarde:', err))
   }, [zoom, theme, autoSaveDelay])
 
   // Auto-update events
@@ -248,6 +388,7 @@ function AppContent() {
     else if (id === 'mode-split') setMode('split')
     else if (id === 'mode-edit') setMode('edit')
     else if (id === 'save') save()
+    else if (id === 'search-replace') setSearchReplaceOpen(true)
     else if (id === 'open-vault') {} // géré par Sidebar
     else if (id === 'open-builtin-example') openBuiltinExample()
     else if (id === 'reload-file' && extra) {
@@ -261,7 +402,7 @@ function AppContent() {
       // Sauvegarder le repo path si fourni
       if (data.repoDir) {
         setGitRepoPath(data.repoDir)
-        window.electron.saveConfig({ gitRepoPath: data.repoDir }).catch(() => {})
+        window.electron.saveConfig({ gitRepoPath: data.repoDir }).catch(err => console.error('[config] Échec de la sauvegarde du repo git:', err))
       }
       // Charger le fichier depuis git
       openFileByPath(data.file.path)
@@ -277,7 +418,7 @@ function AppContent() {
     const filePath = file.path
     if (!filePath) return
     // Check if directory or file via extension
-    if (!/\.(mdx?|md)$/i.test(filePath)) {
+    if (!/\.(mxt|md)$/i.test(filePath)) {
       // Assume it's a directory
       openVaultFromPath(filePath)
     } else {
@@ -329,6 +470,7 @@ function AppContent() {
         theme={theme} onToggleTheme={toggleTheme}
         onPrint={handlePrint}
         outlineOpen={outlineOpen} onToggleOutline={() => setOutlineOpen(o => !o)}
+        searchReplaceOpen={searchReplaceOpen} onToggleSearchReplace={() => setSearchReplaceOpen(s => !s)}
       />
 
       <div ref={containerRef} style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -355,6 +497,7 @@ function AppContent() {
                   }}
                   isReadOnly={activeTab?.isReadOnly ?? false}
                   theme={theme}
+                  onEditorCreated={(view) => { editorViewRef.current = view }}
                 />
 
               </div>
@@ -370,7 +513,7 @@ function AppContent() {
 
             {/* Aperçu */}
             {activeTab && (mode === 'read' || mode === 'split') && (
-              <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div ref={previewRef} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <Preview
                   source={source}
                   filePath={activeTabPath}
@@ -476,7 +619,16 @@ function AppContent() {
       />
 
       {/* Find in page (Ctrl+F natif) */}
-      <FindBar ref={findBarRef} open={findBarOpen} onClose={() => setFindBarOpen(false)} contentRef={contentRef} />
+      <FindBar ref={findBarRef} open={findBarOpen} onClose={() => setFindBarOpen(false)} source={source} previewRef={previewRef} editorViewRef={editorViewRef} />
+
+      {/* Search & Replace (Ctrl+Shift+H) */}
+      <SearchReplaceBar
+        open={searchReplaceOpen}
+        onClose={() => setSearchReplaceOpen(false)}
+        source={source}
+        onReplace={val => { if (activeTab && !activeTab.isReadOnly) updateTabContent(activeTab.path, val) }}
+        isReadOnly={activeTab?.isReadOnly ?? true}
+      />
 
       {/* Git Connect Modal */}
       {gitConnectOpen && (

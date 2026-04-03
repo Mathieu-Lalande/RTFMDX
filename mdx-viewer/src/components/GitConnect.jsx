@@ -51,7 +51,7 @@ export default function GitConnect({ onRepositoryOpened, onClose }) {
       const result = await window.electron.gitReadMd(file.path)
       if (result.ok) {
         // Sauvegarder le repo path
-        window.electron.saveConfig({ gitRepoPath: repoDir }).catch(() => {})
+        window.electron.saveConfig({ gitRepoPath: repoDir }).catch(err => console.error('[config] Échec de la sauvegarde du repo git:', err))
 
         onRepositoryOpened({
           file,
@@ -135,7 +135,7 @@ export default function GitConnect({ onRepositoryOpened, onClose }) {
               color: 'var(--text-muted)',
               lineHeight: '1.4',
             }}>
-              <strong>Note :</strong> Vous pouvez éditer les fichiers <code style={{ fontFamily: 'var(--font-mono)', background: 'rgba(0,0,0,0.2)', padding: '1px 4px', borderRadius: '2px' }}>.md</code> (markdown basique) et les fichiers <code style={{ fontFamily: 'var(--font-mono)', background: 'rgba(0,0,0,0.2)', padding: '1px 4px', borderRadius: '2px' }}>.mdx</code> (avec composants).
+              <strong>Note :</strong> Vous pouvez éditer les fichiers <code style={{ fontFamily: 'var(--font-mono)', background: 'rgba(0,0,0,0.2)', padding: '1px 4px', borderRadius: '2px' }}>.md</code> (markdown) et <code style={{ fontFamily: 'var(--font-mono)', background: 'rgba(0,0,0,0.2)', padding: '1px 4px', borderRadius: '2px' }}>.mxt</code> (markdown + composants).
             </div>
 
             <button
@@ -233,14 +233,14 @@ export default function GitConnect({ onRepositoryOpened, onClose }) {
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '12px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {file.name}
-                        {file.name.endsWith('.md') && !file.name.endsWith('.mdx') && (
+                        {file.name.endsWith('.md') && (
                           <span style={{ fontSize: '10px', padding: '1px 6px', background: 'rgba(147,112,219,0.2)', borderRadius: '3px', color: 'rgba(147,112,219,0.8)' }}>
-                            markdown
+                            md
                           </span>
                         )}
-                        {file.name.endsWith('.mdx') && (
+                        {file.name.endsWith('.mxt') && (
                           <span style={{ fontSize: '10px', padding: '1px 6px', background: 'rgba(100,200,255,0.2)', borderRadius: '3px', color: 'rgba(100,200,255,0.8)' }}>
-                            mdx
+                            mxt
                           </span>
                         )}
                       </div>

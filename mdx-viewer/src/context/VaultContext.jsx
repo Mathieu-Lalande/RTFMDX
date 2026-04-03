@@ -78,7 +78,7 @@ export function VaultProvider({ children }) {
       const filtered = prev.filter(r => r.path !== filePath)
       const updated = [{ path: filePath, name: fileName, openedAt: new Date().toISOString() }, ...filtered].slice(0, 10)
       // persist
-      window.electron.saveConfig({ recentFiles: updated }).catch(() => {})
+      window.electron.saveConfig({ recentFiles: updated }).catch(err => console.error('[config] Échec de la sauvegarde des fichiers récents:', err))
       return updated
     })
   }, [])
@@ -97,7 +97,7 @@ export function VaultProvider({ children }) {
     // Load config (recent files, etc.)
     window.electron.getConfig().then(cfg => {
       if (cfg.recentFiles) setRecentFiles(cfg.recentFiles)
-    }).catch(() => {})
+    }).catch(err => console.error('[config] Échec du chargement des fichiers récents:', err))
 
     window.electron.onVaultChanged((newTree) => {
       setTree(newTree)
@@ -299,7 +299,7 @@ export function VaultProvider({ children }) {
   useEffect(() => {
     if (!activeTabPath || !vaultFiles.length) { setBacklinks([]); return }
     if (activeTabPath.startsWith('__builtin__')) { setBacklinks([]); return }
-    const basename = activeTabPath.split(/[\\/]/).pop().replace(/\.(mdx?|md)$/, '')
+    const basename = activeTabPath.split(/[\\/]/).pop().replace(/\.(mxt|md)$/, '')
     const pattern = new RegExp(`\\[\\[${basename}(?:\\|[^\\]]*)?\\]\\]`, 'i')
 
     async function compute() {

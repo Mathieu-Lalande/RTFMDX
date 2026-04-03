@@ -1,8 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electron', {
-  // MDX
-  compileMdx: (source, filePath) => ipcRenderer.invoke('compile-mdx', source, filePath),
+  // MXT
+  compileMxt: (source, filePath) => ipcRenderer.invoke('compile-mxt', source, filePath),
   searchVault: (query) => ipcRenderer.invoke('search-vault', query),
 
   // Config

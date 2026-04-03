@@ -42,7 +42,7 @@ export default function StatusBar({ filePath, wordCount, charCount, saveStatus, 
         )}
         <span>{wordCount} mots</span>
         <span>{charCount} caractères</span>
-        <span>MDX</span>
+        <span>{filePath?.endsWith('.md') ? 'MD' : 'MXT'}</span>
         {mode && <span>— {{ read: 'Lecture', split: 'Split', edit: 'Édition' }[mode]}</span>}
         {tabCount > 0 && <span>{tabCount} onglet{tabCount > 1 ? 's' : ''}</span>}
         {saveStatus === 'saved' && (
