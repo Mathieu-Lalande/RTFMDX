@@ -1,0 +1,91 @@
+# Documentation MDX Viewer
+
+Bienvenue dans votre **éditeur MDX** local. Éditez à gauche, le rendu apparaît à droite en temps réel.
+
+## Composants disponibles
+
+<Callout type="tip" title="Astuce">
+  Double-cliquez sur n'importe quel fichier `.mdx` dans l'explorateur Windows pour l'ouvrir directement ici.
+</Callout>
+
+<Callout type="info">
+  Le rendu se met à jour **automatiquement** 350ms après chaque frappe.
+</Callout>
+
+<Callout type="warning">
+  N'oubliez pas de sauvegarder avec **Ctrl+S** avant de fermer.
+</Callout>
+
+<Callout type="danger" title="Irréversible">
+  Supprimer un fichier depuis l'explorateur Windows ne passe pas par la corbeille si vous utilisez Shift+Suppr.
+</Callout>
+
+<Callout type="success">
+  Votre installation est correcte et prête à l'emploi.
+</Callout>
+
+## Étapes d'installation
+
+<Steps>
+  - Cloner ou télécharger le projet
+  - Lancer `npm install` dans le dossier `mdx-viewer`
+  - Lancer `npm run dev` pour le mode développement
+  - Double-cliquer sur un `.mdx` pour l'ouvrir
+</Steps>
+
+## Badges <Badge variant="new">Nouveau</Badge>
+
+Les badges s'insèrent **inline** dans le texte : <Badge variant="beta">Beta</Badge> <Badge variant="deprecated">Déprécié</Badge> <Badge variant="primary">v2.0</Badge>
+
+## Blocs de code
+
+```javascript
+// Exemple de composant React
+export function Greeting({ name }) {
+  return (
+    <div className="greeting">
+      <h1>Bonjour, {name} !</h1>
+      <p>Bienvenue dans MDX Viewer.</p>
+    </div>
+  )
+}
+```
+
+```bash
+# Commandes utiles
+npm run dev      # Mode développement
+npm run build    # Générer le .exe
+```
+
+## Onglets
+
+<Tabs>
+  <Tab label="Installation">
+    Lancez `npm install` dans le dossier `mdx-viewer` pour installer toutes les dépendances.
+  </Tab>
+  <Tab label="Développement">
+    `npm run dev` ouvre l'app en mode hot-reload. Chaque modification est rechargée instantanément.
+  </Tab>
+  <Tab label="Production">
+    `npm run build` génère un installeur `.exe` dans `dist-electron/`. Distribuez ce fichier à vos clients.
+  </Tab>
+</Tabs>
+
+## Formatage Markdown standard
+
+Le **gras**, l'*italique*, le ~~barré~~ et le `code inline` fonctionnent normalement.
+
+| Composant | Usage | Paramètres |
+|-----------|-------|------------|
+| `Callout` | Alertes et notes | `type`, `title` |
+| `Steps` | Listes numérotées | — |
+| `Badge` | Labels inline | `variant` |
+| `CodeBlock` | Blocs de code | `language` |
+| `Tabs` | Onglets | — |
+| `Card` | Cartes cliquables | `title`, `icon`, `href` |
+
+> **Note :** Tous les composants Markdown GFM sont supportés (tableaux, listes de tâches, etc.)
+
+---
+
+Bonne documentation ! ✨

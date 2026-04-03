@@ -1,0 +1,33 @@
+# Dépendances
+mdx-viewer/node_modules/
+test-electron/node_modules/
+
+# Build outputs
+mdx-viewer/dist/
+mdx-viewer/dist-electron/
+mdx-viewer/node_modules/.vite/
+
+# Fichiers de debug temporaires
+mdx-viewer/electron/test.js
+mdx-viewer/electron/test2.js
+mdx-viewer/electron/simple-test.js
+test-electron/
+
+# Logs
+*.log
+/tmp/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Éditeurs
+.vscode/settings.json
+*.suo
+*.user
+
+# Variables d'environnement
+.env
+.env.local
+.env.*.local

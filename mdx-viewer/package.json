@@ -1,0 +1,63 @@
+{
+  "name": "mdx-viewer",
+  "version": "1.0.0",
+  "description": "Viewer/éditeur MDX natif Windows",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 node scripts/launch-electron.js\"",
+    "build": "vite build && electron-builder",
+    "preview": "vite preview",
+    "start": "node scripts/launch-electron.js"
+  },
+  "build": {
+    "appId": "com.mdxviewer.app",
+    "productName": "MDX Viewer",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico",
+      "fileAssociations": [
+        {
+          "ext": "mdx",
+          "name": "MDX Document",
+          "description": "Fichier MDX",
+          "icon": "assets/icon.ico"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "assets/**/*"
+    ]
+  },
+  "dependencies": {
+    "@codemirror/lang-markdown": "^6.3.2",
+    "@codemirror/language-data": "^6.5.2",
+    "@lezer/highlight": "^1.2.3",
+    "@mdx-js/mdx": "^3.1.0",
+    "@uiw/codemirror-themes": "^4.25.9",
+    "@uiw/react-codemirror": "^4.23.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "rehype-highlight": "^7.0.2",
+    "rehype-slug": "^6.0.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "cross-env": "^10.1.0",
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8",
+    "vite": "^6.0.11",
+    "wait-on": "^8.0.3"
+  }
+}
