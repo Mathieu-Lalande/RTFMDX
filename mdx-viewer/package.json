@@ -12,6 +12,7 @@
   "build": {
     "appId": "com.mxtviewer.app",
     "productName": "MXT Viewer",
+    "asar": false,
     "directories": {
       "output": "dist-electron"
     },
