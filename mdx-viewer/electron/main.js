@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, protocol } = require('electron')
 const fs = require('fs')
 const path = require('path')
+const gitManager = require('./git-manager')
 
 // Auto-updater (fails silently if not packaged or no network)
 let autoUpdater = null
@@ -433,6 +434,38 @@ app.whenReady().then(() => {
   ipcMain.on('stop-find-in-page', () => {
     mainWindow?.webContents.stopFindInPage('clearSelection')
   })
+
+  // ── Git Integration ────────────────────────────────────────────────────
+  ipcMain.handle('git-detect-repo', (_, dir) => {
+    const isRepo = gitManager.isGitRepo(dir)
+    if (isRepo) {
+      const info = gitManager.getRepoInfo(dir)
+      return { ok: true, isRepo: true, info }
+    }
+    return { ok: true, isRepo: false }
+  })
+
+  ipcMain.handle('git-open-repo', (_, dir) => {
+    const result = gitManager.openRepo(dir)
+    return result
+  })
+
+
+
+  ipcMain.handle('git-get-markdown-files', async (_, dir) => {
+    const files = gitManager.getMarkdownFiles(dir)
+    return { ok: true, files }
+  })
+
+  ipcMain.handle('git-read-md', (_, filePath) => {
+    const content = gitManager.readMarkdownFile(filePath)
+    if (!content) return { ok: false, error: 'Impossible de lire le fichier' }
+    return { ok: true, content, filePath }
+  })
+
+
+
+
 })
 
 // ─── Instance unique ───────────────────────────────────────────────────────

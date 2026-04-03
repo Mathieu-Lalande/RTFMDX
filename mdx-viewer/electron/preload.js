@@ -37,6 +37,12 @@ contextBridge.exposeInMainWorld('electron', {
   saveFileAs: (data) => ipcRenderer.invoke('save-file-as', data),
   openFile: () => ipcRenderer.invoke('open-file'),
 
+  // Git Integration
+  gitDetectRepo: (dir) => ipcRenderer.invoke('git-detect-repo', dir),
+  gitOpenRepo: (dir) => ipcRenderer.invoke('git-open-repo', dir),
+  gitGetMarkdownFiles: (dir) => ipcRenderer.invoke('git-get-markdown-files', dir),
+  gitReadMd: (filePath) => ipcRenderer.invoke('git-read-md', filePath),
+
   // Fenêtre
   windowMinimize: () => ipcRenderer.invoke('window-minimize'),
   windowMaximize: () => ipcRenderer.invoke('window-maximize'),

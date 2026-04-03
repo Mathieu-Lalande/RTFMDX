@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Icons from './Icons.jsx'
 
 const MODE_CONFIG = [
   {
@@ -39,7 +40,7 @@ const MODE_CONFIG = [
 export default function TitleBar({
   fileName, isDirty, onSave, onOpen, saveStatus, mode, onModeChange,
   canBack, canForward, onBack, onForward, onOpenPalette, onOpenSearch,
-  theme, onToggleTheme, onPrint, outlineOpen, onToggleOutline
+  theme, onToggleTheme, onPrint, outlineOpen, onToggleOutline, onOpenGit
 }) {
   const [isMaximized, setIsMaximized] = useState(false)
 
@@ -94,18 +95,24 @@ export default function TitleBar({
       {/* Actions fichier */}
       <div style={{ display: 'flex', gap: '4px', WebkitAppRegion: 'no-drag', flexShrink: 0 }}>
         <TitleButton onClick={onOpen} title="Ouvrir (Ctrl+O)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-          </svg>
+          {Icons.open}
           <span>Ouvrir</span>
         </TitleButton>
+        {onOpenGit && (
+          <TitleButton onClick={onOpenGit} title="Connecter Git">
+            {Icons.git}
+            <span>Git</span>
+          </TitleButton>
+        )}
         <TitleButton onClick={onSave} title="Sauvegarder (Ctrl+S)" accent={isDirty}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-            <polyline points="17 21 17 13 7 13 7 21"/>
-            <polyline points="7 3 7 8 15 8"/>
-          </svg>
-          <span>{saveStatus === 'saving' ? 'Sauvegarde…' : saveStatus === 'saved' ? 'Sauvegardé ✓' : 'Sauvegarder'}</span>
+          {Icons.save}
+          <span>
+            {saveStatus === 'saving' ? 'Sauvegarde…' : saveStatus === 'saved' ? (
+              <>Sauvegardé {Icons.check}</> 
+            ) : (
+              'Sauvegarder'
+            )}
+          </span>
         </TitleButton>
       </div>
 

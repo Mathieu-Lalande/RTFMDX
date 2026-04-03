@@ -240,7 +240,10 @@ export function VaultProvider({ children }) {
     const existing = tabs.find(t => t.path === filePath)
     if (existing) { setActiveTab(filePath); return { ok: true } }
     const result = await window.electron.readVaultFile(filePath)
-    if (result.ok) openTab({ path: result.path, name: result.name, content: result.content })
+    if (result.ok) {
+      // Si forceReadOnly n'est pas spécifié, déterminer basé sur extension
+      openTab({ path: result.path, name: result.name, content: result.content })
+    }
     return result
   }, [tabs, setActiveTab, openTab])
 

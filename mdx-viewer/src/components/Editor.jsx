@@ -127,7 +127,7 @@ const baseExtensions = [
   })
 ]
 
-export default function Editor({ value, onChange, isReadOnly, theme, onOpenSearchReplace }) {
+export default function Editor({ value, onChange, isReadOnly, theme }) {
   const isDark = theme !== 'light'
   const bgColor = isDark ? '#0f1117' : '#fafafa'
   const editorTheme = isDark ? mdxThemeDark : mdxThemeLight
@@ -159,20 +159,6 @@ export default function Editor({ value, onChange, isReadOnly, theme, onOpenSearc
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
             <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
           </svg>
-        )}
-        {!isReadOnly && onOpenSearchReplace && (
-          <button onClick={onOpenSearchReplace} title="Rechercher & Remplacer" style={{
-            marginLeft: 'auto', background: 'transparent', border: 'none', cursor: 'pointer',
-            color: 'var(--text-muted)', padding: '2px 4px', borderRadius: '4px', display: 'flex', alignItems: 'center',
-          }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)' }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              <line x1="3" y1="16" x2="8" y2="16"/><line x1="3" y1="20" x2="10" y2="20"/>
-            </svg>
-          </button>
         )}
       </div>
       <div ref={containerRef} style={{ flex: 1, overflow: 'auto' }}>

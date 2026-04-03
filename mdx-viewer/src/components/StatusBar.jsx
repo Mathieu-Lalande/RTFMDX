@@ -1,5 +1,5 @@
 
-export default function StatusBar({ filePath, wordCount, charCount, saveStatus, mode, tabCount, zoom, autoSaveDelay, isReadOnly }) {
+export default function StatusBar({ filePath, wordCount, charCount, saveStatus, mode, tabCount, zoom, autoSaveDelay, isReadOnly, gitRepoPath }) {
   return (
     <div style={{
       height: '26px',
@@ -26,13 +26,12 @@ export default function StatusBar({ filePath, wordCount, charCount, saveStatus, 
       </span>
 
       <div style={{ display: 'flex', gap: '16px', flexShrink: 0, alignItems: 'center' }}>
+        {gitRepoPath && (
+          <span style={{ color: 'var(--green)', opacity: 0.7 }}>Git sync</span>
+        )}
         {isReadOnly && (
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--yellow)' }}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-            Lecture seule
+            🔒 Lecture seule
           </span>
         )}
         {autoSaveDelay > 0 && (

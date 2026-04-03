@@ -8,8 +8,8 @@ import Sidebar from './components/Sidebar/Sidebar.jsx'
 import TabBar from './components/TabBar.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
 import OutlinePanel from './components/OutlinePanel.jsx'
-import SearchReplace from './components/SearchReplace.jsx'
 import FindBar from './components/FindBar.jsx'
+import GitConnect from './components/GitConnect.jsx'
 
 // ─── Panneau Backlinks ───────────────────────────────────────────────────────
 function BacklinksPanel({ backlinks, onOpen }) {
@@ -114,6 +114,8 @@ function AppContent() {
   const [isPanelResizing, setIsPanelResizing] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [gitConnectOpen, setGitConnectOpen] = useState(false)
+  const [gitRepoPath, setGitRepoPath] = useState(null)
   const containerRef = useRef(null)
 
   // ── New state ──────────────────────────────────────────────────────────
@@ -135,6 +137,7 @@ function AppContent() {
       if (cfg.zoom !== undefined) setZoom(cfg.zoom)
       if (cfg.theme) setTheme(cfg.theme)
       if (cfg.autoSave !== undefined) setAutoSaveDelay(cfg.autoSave)
+      if (cfg.gitRepoPath) setGitRepoPath(cfg.gitRepoPath)
     }).catch(() => {})
     configLoadedRef.current = true
   }, [])
@@ -252,6 +255,19 @@ function AppContent() {
     }
   }, [save, updateTabContent, openBuiltinExample])
 
+  // Handler quand un fichier git est sélectionné
+  const handleGitFileSelected = useCallback((data) => {
+    if (data?.file?.path) {
+      // Sauvegarder le repo path si fourni
+      if (data.repoDir) {
+        setGitRepoPath(data.repoDir)
+        window.electron.saveConfig({ gitRepoPath: data.repoDir }).catch(() => {})
+      }
+      // Charger le fichier depuis git
+      openFileByPath(data.file.path)
+    }
+  }, [openFileByPath])
+
   // Drag & drop to open vault or file
   const handleDragOver = useCallback((e) => { e.preventDefault() }, [])
   const handleDrop = useCallback((e) => {
@@ -309,6 +325,7 @@ function AppContent() {
         onBack={navigateBack} onForward={navigateForward}
         onOpenPalette={() => setPaletteOpen(true)}
         onOpenSearch={() => setSearchOpen(true)}
+        onOpenGit={() => setGitConnectOpen(true)}
         theme={theme} onToggleTheme={toggleTheme}
         onPrint={handlePrint}
         outlineOpen={outlineOpen} onToggleOutline={() => setOutlineOpen(o => !o)}
@@ -338,16 +355,8 @@ function AppContent() {
                   }}
                   isReadOnly={activeTab?.isReadOnly ?? false}
                   theme={theme}
-                  onOpenSearchReplace={() => setSearchReplaceOpen(o => !o)}
                 />
-                {/* Search & Replace */}
-                {searchReplaceOpen && (
-                  <SearchReplace
-                    value={source}
-                    onChange={val => activeTab && !activeTab.isReadOnly && updateTabContent(activeTab.path, val)}
-                    onClose={() => setSearchReplaceOpen(false)}
-                  />
-                )}
+
               </div>
             )}
 
@@ -447,6 +456,7 @@ function AppContent() {
           zoom={zoom}
           autoSaveDelay={autoSaveDelay}
           isReadOnly={activeTab?.isReadOnly ?? false}
+          gitRepoPath={gitRepoPath}
         />
       </div>
 
@@ -467,6 +477,14 @@ function AppContent() {
 
       {/* Find in page (Ctrl+F natif) */}
       <FindBar ref={findBarRef} open={findBarOpen} onClose={() => setFindBarOpen(false)} contentRef={contentRef} />
+
+      {/* Git Connect Modal */}
+      {gitConnectOpen && (
+        <GitConnect
+          onRepositoryOpened={handleGitFileSelected}
+          onClose={() => setGitConnectOpen(false)}
+        />
+      )}
     </div>
   )
 }
