@@ -126,6 +126,8 @@ function AppContent() {
   const [updateBanner, setUpdateBanner] = useState(null) // null | 'available' | 'downloaded'
   const autoSaveTimerRef = useRef(null)
   const configLoadedRef = useRef(false)
+  const contentRef = useRef(null)
+  const findBarRef = useRef(null)
 
   // Load config on startup
   useEffect(() => {
@@ -224,11 +226,18 @@ function AppContent() {
       // Outline: Ctrl+Shift+O
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'O') { e.preventDefault(); setOutlineOpen(o => !o) }
       // Find in page: Ctrl+F
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') { e.preventDefault(); setFindBarOpen(o => !o) }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') { 
+        e.preventDefault()
+        if (findBarOpen) {
+          findBarRef.current?.selectAll()
+        } else {
+          setFindBarOpen(true)
+        }
+      }
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
-  }, [save, openFile, navigateBack, navigateForward, zoomIn, zoomOut, zoomReset])
+  }, [save, openFile, navigateBack, navigateForward, zoomIn, zoomOut, zoomReset, findBarOpen])
 
   // Palette : actions
   const handlePaletteAction = useCallback((id, extra) => {
@@ -318,7 +327,7 @@ function AppContent() {
             <TabBar />
           </div>
 
-          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          <div ref={contentRef} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
             {/* Éditeur */}
             {isEditorVisible && (
               <div style={{ width: mode === 'edit' ? '100%' : `${panelWidth}%`, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
@@ -327,7 +336,6 @@ function AppContent() {
                   onChange={val => {
                     if (activeTab && !activeTab.isReadOnly) updateTabContent(activeTab.path, val)
                   }}
-                  vaultFiles={vaultFiles}
                   isReadOnly={activeTab?.isReadOnly ?? false}
                   theme={theme}
                   onOpenSearchReplace={() => setSearchReplaceOpen(o => !o)}
@@ -458,7 +466,7 @@ function AppContent() {
       />
 
       {/* Find in page (Ctrl+F natif) */}
-      <FindBar open={findBarOpen} onClose={() => setFindBarOpen(false)} />
+      <FindBar ref={findBarRef} open={findBarOpen} onClose={() => setFindBarOpen(false)} contentRef={contentRef} />
     </div>
   )
 }

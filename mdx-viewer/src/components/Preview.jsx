@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import * as runtime from 'react/jsx-runtime'
 import { Callout } from './mdx/Callout.jsx'
 import { Steps } from './mdx/Steps.jsx'
@@ -72,6 +72,7 @@ export default function Preview({ source, filePath, frontmatter, readOnly, zoom 
   const debouncedSource = useDebounce(source, 400)
   const [content, setContent] = useState(null)
   const [error, setError] = useState(null)
+  const containerRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -109,7 +110,7 @@ export default function Preview({ source, filePath, frontmatter, readOnly, zoom 
         </div>
       )}
 
-      <div style={{
+      <div ref={containerRef} style={{
         flex: 1, overflowY: 'auto',
         padding: readOnly ? '4rem 5rem' : '2.5rem 3rem',
       }}>

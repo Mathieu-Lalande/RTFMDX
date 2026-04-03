@@ -4,6 +4,7 @@ import { languages } from '@codemirror/language-data'
 import { EditorView } from '@codemirror/view'
 import { createTheme } from '@uiw/codemirror-themes'
 import { tags as t } from '@lezer/highlight'
+import { useRef } from 'react'
 
 const mdxThemeDark = createTheme({
   theme: 'dark',
@@ -130,6 +131,7 @@ export default function Editor({ value, onChange, isReadOnly, theme, onOpenSearc
   const isDark = theme !== 'light'
   const bgColor = isDark ? '#0f1117' : '#fafafa'
   const editorTheme = isDark ? mdxThemeDark : mdxThemeLight
+  const containerRef = useRef(null)
 
   return (
     <div style={{
@@ -173,7 +175,7 @@ export default function Editor({ value, onChange, isReadOnly, theme, onOpenSearc
           </button>
         )}
       </div>
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div ref={containerRef} style={{ flex: 1, overflow: 'auto' }}>
         <CodeMirror
           value={value}
           height="100%"
