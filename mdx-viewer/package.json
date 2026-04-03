@@ -5,7 +5,7 @@
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 node scripts/launch-electron.js\"",
-    "build": "vite build && electron-builder",
+    "build": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false vite build && electron-builder",
     "preview": "vite preview",
     "start": "node scripts/launch-electron.js"
   },
@@ -17,19 +17,16 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.ico",
       "fileAssociations": [
         {
           "ext": "mxt",
           "name": "MXT Document",
-          "description": "Fichier Markdown eXTended",
-          "icon": "assets/icon.ico"
+          "description": "Fichier Markdown eXTended"
         },
         {
           "ext": "md",
           "name": "Markdown",
-          "description": "Fichier Markdown",
-          "icon": "assets/icon.ico"
+          "description": "Fichier Markdown"
         }
       ]
     },
