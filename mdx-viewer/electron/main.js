@@ -2,6 +2,12 @@ const { app, BrowserWindow, ipcMain, dialog, shell, protocol } = require('electr
 const fs = require('fs')
 const path = require('path')
 
+// Auto-updater (fails silently if not packaged or no network)
+let autoUpdater = null
+try {
+  autoUpdater = require('electron-updater').autoUpdater
+} catch {}
+
 // Protocole vault:// pour servir les images et assets locaux
 app.whenReady().then(() => {}).catch(() => {})
 // (enregistré dans createWindow via protocol.registerFileProtocol)
@@ -143,11 +149,29 @@ function createWindow() {
     return { action: 'deny' }
   })
   mainWindow.on('closed', () => { mainWindow = null })
+
+  // ── Find in page (Ctrl+F natif) ─────────────────────────────────────────
+  mainWindow.webContents.on('found-in-page', (_, result) => {
+    mainWindow.webContents.send('found-in-page', result)
+  })
 }
 
 // ─── IPC handlers ──────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   createWindow()
+
+  // ── Auto-updater ────────────────────────────────────────────────────────
+  if (autoUpdater) {
+    try {
+      autoUpdater.on('update-available', () => {
+        mainWindow?.webContents.send('update-available')
+      })
+      autoUpdater.on('update-downloaded', () => {
+        mainWindow?.webContents.send('update-downloaded')
+      })
+      autoUpdater.checkForUpdatesAndNotify().catch(() => {})
+    } catch {}
+  }
 
   // MDX compilation (source + chemin du fichier courant pour résoudre les images)
   ipcMain.handle('compile-mdx', async (_, source, filePath) => {
@@ -189,6 +213,20 @@ app.whenReady().then(() => {
     return results.slice(0, 100)
   })
 
+  // ── Config ──────────────────────────────────────────────────────────────
+  ipcMain.handle('get-config', () => {
+    return loadConfig()
+  })
+
+  ipcMain.handle('save-config', (_, updates) => {
+    try {
+      const current = loadConfig()
+      const merged = { ...current, ...updates }
+      saveConfig(merged)
+      return { ok: true }
+    } catch (e) { return { ok: false, error: e.message } }
+  })
+
   // ── Vault ──────────────────────────────────────────────────────────────
   ipcMain.handle('open-vault', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
@@ -200,6 +238,18 @@ app.whenReady().then(() => {
     saveConfig({ ...loadConfig(), vaultPath })
     watchVault(mainWindow)
     return { ok: true, vaultPath, tree: getVaultTree(vaultPath) }
+  })
+
+  ipcMain.handle('set-vault', (_, dirPath) => {
+    try {
+      if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) {
+        return { ok: false, error: 'Chemin invalide' }
+      }
+      vaultPath = dirPath
+      saveConfig({ ...loadConfig(), vaultPath })
+      watchVault(mainWindow)
+      return { ok: true, vaultPath, tree: getVaultTree(vaultPath) }
+    } catch (e) { return { ok: false, error: e.message } }
   })
 
   ipcMain.handle('get-vault', () => {
@@ -273,6 +323,23 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('duplicate-file', async (_, filePath) => {
+    try {
+      const dir = path.dirname(filePath)
+      const ext = path.extname(filePath)
+      const base = path.basename(filePath, ext)
+      // Find non-colliding name
+      let candidate = path.join(dir, `${base}-copie${ext}`)
+      if (fs.existsSync(candidate)) {
+        let i = 2
+        while (fs.existsSync(path.join(dir, `${base}-copie-${i}${ext}`))) i++
+        candidate = path.join(dir, `${base}-copie-${i}${ext}`)
+      }
+      fs.copyFileSync(filePath, candidate)
+      return { ok: true, path: candidate, name: path.basename(candidate), content: fs.readFileSync(candidate, 'utf-8') }
+    } catch (e) { return { ok: false, error: e.message } }
+  })
+
   ipcMain.handle('resolve-wiki-link', (_, name) => {
     if (!vaultPath) return null
     const all = getAllFiles(vaultPath)
@@ -289,6 +356,19 @@ app.whenReady().then(() => {
       name: path.basename(f.path, path.extname(f.path)),
       path: f.path
     }))
+  })
+
+  // ── Fichier intégré (exemple) ──────────────────────────────────────────
+  ipcMain.handle('get-builtin-example', () => {
+    try {
+      const examplePath = app.isPackaged
+        ? path.join(process.resourcesPath, 'exemple.mdx')
+        : path.join(__dirname, '../../exemple.mdx')
+      if (!fs.existsSync(examplePath)) {
+        return { ok: false, error: 'Fichier exemple introuvable' }
+      }
+      return { ok: true, content: fs.readFileSync(examplePath, 'utf-8'), name: 'exemple.mdx', path: '__builtin__:exemple' }
+    } catch (e) { return { ok: false, error: e.message } }
   })
 
   // ── Fichier seul (sans vault) ──────────────────────────────────────────
@@ -331,6 +411,11 @@ app.whenReady().then(() => {
     return { ok: false }
   })
 
+  // ── Auto-updater install ───────────────────────────────────────────────
+  ipcMain.handle('install-update', () => {
+    if (autoUpdater) autoUpdater.quitAndInstall()
+  })
+
   // ── Fenêtre ────────────────────────────────────────────────────────────
   ipcMain.handle('window-minimize', () => mainWindow?.minimize())
   ipcMain.handle('window-maximize', () => {
@@ -339,6 +424,15 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('window-close', () => mainWindow?.close())
   ipcMain.handle('window-is-maximized', () => mainWindow?.isMaximized() ?? false)
+
+  // ── Find in page ────────────────────────────────────────────────────────
+  ipcMain.on('find-in-page', (_, text, forward = true, findNext = false) => {
+    if (!text) { mainWindow?.webContents.stopFindInPage('clearSelection'); return }
+    mainWindow?.webContents.findInPage(text, { forward, findNext, matchCase: false })
+  })
+  ipcMain.on('stop-find-in-page', () => {
+    mainWindow?.webContents.stopFindInPage('clearSelection')
+  })
 })
 
 // ─── Instance unique ───────────────────────────────────────────────────────

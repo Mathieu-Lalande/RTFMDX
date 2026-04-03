@@ -68,7 +68,7 @@ function FrontmatterBadge({ frontmatter }) {
   )
 }
 
-export default function Preview({ source, filePath, frontmatter, readOnly }) {
+export default function Preview({ source, filePath, frontmatter, readOnly, zoom }) {
   const debouncedSource = useDebounce(source, 400)
   const [content, setContent] = useState(null)
   const [error, setError] = useState(null)
@@ -90,6 +90,11 @@ export default function Preview({ source, filePath, frontmatter, readOnly }) {
     render()
     return () => { cancelled = true }
   }, [debouncedSource, filePath])
+
+  const effectiveZoom = zoom ?? 1.0
+  const proseStyle = effectiveZoom !== 1.0
+    ? { fontSize: `calc(15px * ${effectiveZoom})` }
+    : {}
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-primary)' }}>
@@ -121,7 +126,7 @@ export default function Preview({ source, filePath, frontmatter, readOnly }) {
               {error}
             </div>
           ) : (
-            <div className="prose">{content}</div>
+            <div className="prose" style={proseStyle}>{content}</div>
           )}
         </div>
       </div>

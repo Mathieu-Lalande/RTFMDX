@@ -37,14 +37,18 @@ function extractTags(content) {
   return [...tags]
 }
 
+// ─── CLI flags ────────────────────────────────────────────────────────────
+const cliReadOnly = typeof process !== 'undefined' && process.argv?.includes('--readonly')
+
 export function VaultProvider({ children }) {
   const [vaultPath, setVaultPath] = useState(null)
   const [vaultName, setVaultName] = useState(null)
   const [tree, setTree] = useState([])
   const [vaultFiles, setVaultFiles] = useState([])
+  const [vaultConfig, setVaultConfig] = useState({}) // vault-level config
 
   // ─── Onglets ─────────────────────────────────────────────────────────────
-  // tab: { path, name, content, isDirty, frontmatter }
+  // tab: { path, name, content, isDirty, frontmatter, isReadOnly }
   const [tabs, setTabs] = useState([])
   const [activeTabPath, setActiveTabPath] = useState(null)
 
@@ -65,6 +69,20 @@ export function VaultProvider({ children }) {
   // ─── Tags ────────────────────────────────────────────────────────────────
   const [allTags, setAllTags] = useState({}) // { tagName: [{ path, name }] }
 
+  // ─── Recent files ────────────────────────────────────────────────────────
+  const [recentFiles, setRecentFiles] = useState([]) // [{ path, name, openedAt }]
+
+  const addRecentFile = useCallback((filePath, fileName) => {
+    if (!filePath || filePath.startsWith('__builtin__')) return
+    setRecentFiles(prev => {
+      const filtered = prev.filter(r => r.path !== filePath)
+      const updated = [{ path: filePath, name: fileName, openedAt: new Date().toISOString() }, ...filtered].slice(0, 10)
+      // persist
+      window.electron.saveConfig({ recentFiles: updated }).catch(() => {})
+      return updated
+    })
+  }, [])
+
   // ─── Chargement au démarrage ─────────────────────────────────────────────
   useEffect(() => {
     window.electron.getVault().then((result) => {
@@ -75,6 +93,11 @@ export function VaultProvider({ children }) {
         refreshVaultFiles()
       }
     })
+
+    // Load config (recent files, etc.)
+    window.electron.getConfig().then(cfg => {
+      if (cfg.recentFiles) setRecentFiles(cfg.recentFiles)
+    }).catch(() => {})
 
     window.electron.onVaultChanged((newTree) => {
       setTree(newTree)
@@ -128,15 +151,40 @@ export function VaultProvider({ children }) {
     }
   }, [updateNavState])
 
+  const openVaultFromPath = useCallback(async (dirPath) => {
+    const result = await window.electron.setVault(dirPath)
+    if (result.ok) {
+      setVaultPath(result.vaultPath)
+      setVaultName(result.vaultPath.split(/[\\/]/).pop())
+      setTree(result.tree)
+      setTabs([])
+      setActiveTabPath(null)
+      historyRef.current = []
+      histIdxRef.current = -1
+      updateNavState()
+      const files = await window.electron.getVaultFiles()
+      setVaultFiles(files)
+      rebuildTags(files)
+    }
+    return result
+  }, [updateNavState])
+
   // ─── Onglets ─────────────────────────────────────────────────────────────
-  const openTab = useCallback(({ path, name, content }) => {
+  const openTab = useCallback(({ path, name, content, isReadOnly: forceReadOnly }) => {
     const { frontmatter } = parseFrontmatter(content)
+    const readOnly = forceReadOnly || frontmatter.readonly === 'true' || vaultConfig.readOnly || cliReadOnly || false
+
     setTabs(prev => {
       const exists = prev.find(t => t.path === path)
-      if (exists) return prev.map(t => t.path === path ? { ...t, content, frontmatter } : t)
-      return [...prev, { path, name, content, isDirty: false, frontmatter }]
+      if (exists) return prev.map(t => t.path === path ? { ...t, content, frontmatter, isReadOnly: readOnly } : t)
+      return [...prev, { path, name, content, isDirty: false, frontmatter, isReadOnly: readOnly }]
     })
     setActiveTabPath(path)
+
+    // Recent files
+    if (path && !path.startsWith('__builtin__')) {
+      addRecentFile(path, name)
+    }
 
     // Historique
     const hist = historyRef.current
@@ -149,7 +197,7 @@ export function VaultProvider({ children }) {
     historyRef.current = newHist
     histIdxRef.current = newHist.length - 1
     updateNavState()
-  }, [updateNavState])
+  }, [updateNavState, vaultConfig, addRecentFile])
 
   const closeTab = useCallback((path) => {
     setTabs(prev => {
@@ -202,6 +250,26 @@ export function VaultProvider({ children }) {
     return { ok: false }
   }, [openFileByPath])
 
+  // ─── Fichier intégré ──────────────────────────────────────────────────────
+  const openBuiltinExample = useCallback(async () => {
+    const BUILTIN_PATH = '__builtin__:exemple'
+    const existing = tabs.find(t => t.path === BUILTIN_PATH)
+    if (existing) { setActiveTab(BUILTIN_PATH); return }
+    const result = await window.electron.getBuiltinExample()
+    if (result.ok) {
+      openTab({ path: BUILTIN_PATH, name: result.name, content: result.content, isReadOnly: true })
+    }
+  }, [tabs, setActiveTab, openTab])
+
+  // ─── Duplication de fichier ───────────────────────────────────────────────
+  const duplicateFile = useCallback(async (filePath) => {
+    const result = await window.electron.duplicateFile(filePath)
+    if (result.ok) {
+      openTab({ path: result.path, name: result.name, content: result.content })
+    }
+    return result
+  }, [openTab])
+
   // ─── Historique ──────────────────────────────────────────────────────────
   const navigateBack = useCallback(() => {
     const idx = histIdxRef.current
@@ -227,6 +295,7 @@ export function VaultProvider({ children }) {
   // ─── Backlinks (recalcul quand fichier actif change) ─────────────────────
   useEffect(() => {
     if (!activeTabPath || !vaultFiles.length) { setBacklinks([]); return }
+    if (activeTabPath.startsWith('__builtin__')) { setBacklinks([]); return }
     const basename = activeTabPath.split(/[\\/]/).pop().replace(/\.(mdx?|md)$/, '')
     const pattern = new RegExp(`\\[\\[${basename}(?:\\|[^\\]]*)?\\]\\]`, 'i')
 
@@ -286,7 +355,7 @@ export function VaultProvider({ children }) {
   return (
     <VaultContext.Provider value={{
       // vault
-      vaultPath, vaultName, tree, vaultFiles, openVault,
+      vaultPath, vaultName, tree, vaultFiles, vaultConfig, openVault, openVaultFromPath,
       // onglets
       tabs, activeTab, activeTabPath, openTab, closeTab, setActiveTab,
       updateTabContent, markTabSaved,
@@ -297,8 +366,13 @@ export function VaultProvider({ children }) {
       backlinks,
       // tags
       allTags,
+      // recent files
+      recentFiles,
       // CRUD
       createFile, createFolder, renameFile, deleteFile, deleteFolder,
+      duplicateFile,
+      // builtin
+      openBuiltinExample,
       // utils
       parseFrontmatter,
     }}>

@@ -7,6 +7,9 @@ import StatusBar from './components/StatusBar.jsx'
 import Sidebar from './components/Sidebar/Sidebar.jsx'
 import TabBar from './components/TabBar.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
+import OutlinePanel from './components/OutlinePanel.jsx'
+import SearchReplace from './components/SearchReplace.jsx'
+import FindBar from './components/FindBar.jsx'
 
 // ─── Panneau Backlinks ───────────────────────────────────────────────────────
 function BacklinksPanel({ backlinks, onOpen }) {
@@ -74,7 +77,7 @@ function SearchPanel({ open, onClose, onOpen }) {
         <div style={{ maxHeight: '420px', overflowY: 'auto' }}>
           {loading && <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Recherche…</div>}
           {!loading && query && !results.length && <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Aucun résultat pour "{query}"</div>}
-          {results.map((r, i) => (
+          {results.map((r) => (
             <div key={`${r.path}-${r.line}`} onClick={() => { onOpen(r.path); onClose() }}
               style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
@@ -98,9 +101,9 @@ function SearchPanel({ open, onClose, onOpen }) {
 function AppContent() {
   const {
     activeTab, activeTabPath, tabs, vaultPath, vaultFiles,
-    updateTabContent, markTabSaved, openFileByPath,
+    updateTabContent, markTabSaved, openFileByPath, openVaultFromPath,
     canBack, canForward, navigateBack, navigateForward,
-    backlinks, parseFrontmatter,
+    backlinks, openBuiltinExample,
   } = useVault()
 
   const [mode, setMode] = useState('read')
@@ -113,6 +116,45 @@ function AppContent() {
   const [searchOpen, setSearchOpen] = useState(false)
   const containerRef = useRef(null)
 
+  // ── New state ──────────────────────────────────────────────────────────
+  const [zoom, setZoom] = useState(1.0)
+  const [theme, setTheme] = useState('dark')
+  const [autoSaveDelay, setAutoSaveDelay] = useState(3000)
+  const [outlineOpen, setOutlineOpen] = useState(false)
+  const [searchReplaceOpen, setSearchReplaceOpen] = useState(false)
+  const [findBarOpen, setFindBarOpen] = useState(false)
+  const [updateBanner, setUpdateBanner] = useState(null) // null | 'available' | 'downloaded'
+  const autoSaveTimerRef = useRef(null)
+  const configLoadedRef = useRef(false)
+
+  // Load config on startup
+  useEffect(() => {
+    window.electron.getConfig().then(cfg => {
+      if (cfg.zoom !== undefined) setZoom(cfg.zoom)
+      if (cfg.theme) setTheme(cfg.theme)
+      if (cfg.autoSave !== undefined) setAutoSaveDelay(cfg.autoSave)
+    }).catch(() => {})
+    configLoadedRef.current = true
+  }, [])
+
+  // Apply theme
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+  }, [theme])
+
+  // Persist zoom/theme changes (skip initial mount)
+  const persistConfigRef = useRef(false)
+  useEffect(() => {
+    if (!persistConfigRef.current) { persistConfigRef.current = true; return }
+    window.electron.saveConfig({ zoom, theme, autoSave: autoSaveDelay }).catch(() => {})
+  }, [zoom, theme, autoSaveDelay])
+
+  // Auto-update events
+  useEffect(() => {
+    window.electron.onUpdateAvailable(() => setUpdateBanner('available'))
+    window.electron.onUpdateDownloaded(() => setUpdateBanner('downloaded'))
+  }, [])
+
   const source = activeTab?.content ?? ''
   const frontmatter = activeTab?.frontmatter ?? {}
   const wordCount = source.trim() ? source.trim().split(/\s+/).length : 0
@@ -120,6 +162,8 @@ function AppContent() {
   // Sauvegarde
   const save = useCallback(async () => {
     if (!activeTab) return
+    if (activeTab.isReadOnly) return
+    if (activeTab.path?.startsWith('__builtin__')) return
     if (!activeTab.path) {
       const r = await window.electron.saveFileAs({ content: source, dir: vaultPath })
       if (r.ok) { markTabSaved(r.path); setSaveStatus('saved'); setTimeout(() => setSaveStatus(null), 2000) }
@@ -136,6 +180,33 @@ function AppContent() {
     if (r.ok) openFileByPath(r.path)
   }, [openFileByPath])
 
+  // Auto-save
+  useEffect(() => {
+    if (!activeTab?.isDirty || activeTab?.isReadOnly || !autoSaveDelay) return
+    clearTimeout(autoSaveTimerRef.current)
+    autoSaveTimerRef.current = setTimeout(() => {
+      save()
+    }, autoSaveDelay)
+    return () => clearTimeout(autoSaveTimerRef.current)
+  }, [activeTab?.isDirty, activeTab?.isReadOnly, source, autoSaveDelay, save])
+
+  // Zoom handlers
+  const zoomIn = useCallback(() => setZoom(z => Math.min(1.5, parseFloat((z + 0.1).toFixed(1)))))
+  const zoomOut = useCallback(() => setZoom(z => Math.max(0.7, parseFloat((z - 0.1).toFixed(1)))))
+  const zoomReset = useCallback(() => setZoom(1.0))
+
+  // Theme toggle
+  const toggleTheme = useCallback(() => setTheme(t => t === 'dark' ? 'light' : 'dark'))
+
+  // Print
+  const handlePrint = useCallback(() => window.print())
+
+  // Heading click in outline
+  const handleHeadingClick = useCallback((id) => {
+    const el = document.getElementById(id)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
   // Raccourcis clavier
   useEffect(() => {
     const h = (e) => {
@@ -143,13 +214,21 @@ function AppContent() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'o') { e.preventDefault(); openFile() }
       if ((e.ctrlKey || e.metaKey) && e.key === 'e') { e.preventDefault(); setMode(m => m === 'read' ? 'split' : m === 'split' ? 'edit' : 'read') }
       if ((e.ctrlKey || e.metaKey) && e.key === 'p') { e.preventDefault(); setPaletteOpen(p => !p) }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') { e.preventDefault(); setSearchOpen(p => !p) }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'h') { e.preventDefault(); setSearchOpen(p => !p) }
       if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); navigateBack() }
       if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); navigateForward() }
+      // Zoom
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) { e.preventDefault(); zoomIn() }
+      if ((e.ctrlKey || e.metaKey) && e.key === '-') { e.preventDefault(); zoomOut() }
+      if ((e.ctrlKey || e.metaKey) && e.key === '0') { e.preventDefault(); zoomReset() }
+      // Outline: Ctrl+Shift+O
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'O') { e.preventDefault(); setOutlineOpen(o => !o) }
+      // Find in page: Ctrl+F
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') { e.preventDefault(); setFindBarOpen(o => !o) }
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
-  }, [save, openFile, navigateBack, navigateForward])
+  }, [save, openFile, navigateBack, navigateForward, zoomIn, zoomOut, zoomReset])
 
   // Palette : actions
   const handlePaletteAction = useCallback((id, extra) => {
@@ -158,11 +237,28 @@ function AppContent() {
     else if (id === 'mode-edit') setMode('edit')
     else if (id === 'save') save()
     else if (id === 'open-vault') {} // géré par Sidebar
+    else if (id === 'open-builtin-example') openBuiltinExample()
     else if (id === 'reload-file' && extra) {
-      // recharge le contenu du tab après création depuis template
       updateTabContent(extra.path, extra.content)
     }
-  }, [save, updateTabContent])
+  }, [save, updateTabContent, openBuiltinExample])
+
+  // Drag & drop to open vault or file
+  const handleDragOver = useCallback((e) => { e.preventDefault() }, [])
+  const handleDrop = useCallback((e) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
+    if (!file) return
+    const filePath = file.path
+    if (!filePath) return
+    // Check if directory or file via extension
+    if (!/\.(mdx?|md)$/i.test(filePath)) {
+      // Assume it's a directory
+      openVaultFromPath(filePath)
+    } else {
+      openFileByPath(filePath)
+    }
+  }, [openVaultFromPath, openFileByPath])
 
   // Resize sidebar
   const startSidebarResize = useCallback((e) => {
@@ -186,9 +282,16 @@ function AppContent() {
     window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp)
   }, [panelWidth, sidebarWidth])
 
+  const isEditorVisible = mode === 'split' || mode === 'edit'
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', cursor: (isSidebarResizing || isPanelResizing) ? 'col-resize' : 'default' }}>
+    <div
+      style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', cursor: (isSidebarResizing || isPanelResizing) ? 'col-resize' : 'default' }}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       <TitleBar
+        className="no-print"
         fileName={activeTab?.frontmatter?.title || activeTab?.name || 'Aucun fichier'}
         isDirty={activeTab?.isDirty ?? false}
         onSave={save} onOpen={openFile}
@@ -197,28 +300,46 @@ function AppContent() {
         onBack={navigateBack} onForward={navigateForward}
         onOpenPalette={() => setPaletteOpen(true)}
         onOpenSearch={() => setSearchOpen(true)}
+        theme={theme} onToggleTheme={toggleTheme}
+        onPrint={handlePrint}
+        outlineOpen={outlineOpen} onToggleOutline={() => setOutlineOpen(o => !o)}
       />
 
       <div ref={containerRef} style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Sidebar */}
-        <div style={{ display: 'flex', flexDirection: 'column', width: sidebarWidth, flexShrink: 0, position: 'relative', overflow: 'hidden', borderRight: '1px solid var(--border)' }}>
+        <div className="no-print" style={{ display: 'flex', flexDirection: 'column', width: sidebarWidth, flexShrink: 0, position: 'relative', overflow: 'hidden', borderRight: '1px solid var(--border)' }}>
           <Sidebar activeFilePath={activeTabPath} width={sidebarWidth} onResizeStart={startSidebarResize} />
           <BacklinksPanel backlinks={backlinks} onOpen={openFileByPath} />
         </div>
 
         {/* Zone principale */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-          <TabBar />
+          <div className="no-print">
+            <TabBar />
+          </div>
 
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
             {/* Éditeur */}
-            {(mode === 'split' || mode === 'edit') && (
-              <div style={{ width: mode === 'edit' ? '100%' : `${panelWidth}%`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {isEditorVisible && (
+              <div style={{ width: mode === 'edit' ? '100%' : `${panelWidth}%`, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
                 <Editor
                   value={source}
-                  onChange={val => activeTab && updateTabContent(activeTab.path, val)}
+                  onChange={val => {
+                    if (activeTab && !activeTab.isReadOnly) updateTabContent(activeTab.path, val)
+                  }}
                   vaultFiles={vaultFiles}
+                  isReadOnly={activeTab?.isReadOnly ?? false}
+                  theme={theme}
+                  onOpenSearchReplace={() => setSearchReplaceOpen(o => !o)}
                 />
+                {/* Search & Replace */}
+                {searchReplaceOpen && (
+                  <SearchReplace
+                    value={source}
+                    onChange={val => activeTab && !activeTab.isReadOnly && updateTabContent(activeTab.path, val)}
+                    onClose={() => setSearchReplaceOpen(false)}
+                  />
+                )}
               </div>
             )}
 
@@ -238,6 +359,7 @@ function AppContent() {
                   filePath={activeTabPath}
                   frontmatter={frontmatter}
                   readOnly={mode === 'read'}
+                  zoom={zoom}
                 />
               </div>
             )}
@@ -253,18 +375,72 @@ function AppContent() {
                 <p style={{ fontSize: '11px', opacity: 0.3 }}>ou Ctrl+P pour la palette de commandes</p>
               </div>
             )}
+
+            {/* Outline panel (right sidebar) */}
+            <OutlinePanel
+              source={source}
+              onHeadingClick={handleHeadingClick}
+              open={outlineOpen}
+              onClose={() => setOutlineOpen(false)}
+            />
           </div>
         </div>
       </div>
 
-      <StatusBar
-        filePath={activeTabPath}
-        wordCount={wordCount}
-        charCount={source.length}
-        saveStatus={saveStatus}
-        mode={mode}
-        tabCount={tabs.length}
-      />
+      {/* Update banner */}
+      {updateBanner && (
+        <div style={{
+          padding: '8px 16px',
+          background: updateBanner === 'downloaded' ? 'var(--accent-soft)' : 'rgba(16,185,129,0.1)',
+          borderTop: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', gap: '12px',
+          fontSize: '12px', color: 'var(--text-secondary)', flexShrink: 0,
+        }} className="no-print">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2">
+            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+            <polyline points="17 6 23 6 23 12"/>
+          </svg>
+          <span style={{ flex: 1 }}>
+            {updateBanner === 'downloaded'
+              ? 'Mise à jour téléchargée — Redémarrez pour installer'
+              : 'Mise à jour disponible — Téléchargement en cours…'}
+          </span>
+          {updateBanner === 'downloaded' && (
+            <button
+              onClick={() => window.electron.installUpdate()}
+              style={{
+                padding: '3px 10px', background: 'var(--accent)', border: 'none',
+                borderRadius: '5px', color: 'white', fontSize: '11px', fontWeight: '600',
+                cursor: 'pointer', fontFamily: 'var(--font-sans)',
+              }}
+            >
+              Redémarrer
+            </button>
+          )}
+          <button onClick={() => setUpdateBanner(null)} style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: 'var(--text-muted)', padding: '2px 4px', borderRadius: '3px',
+          }}>
+            <svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" strokeWidth="1.5">
+              <line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/>
+            </svg>
+          </button>
+        </div>
+      )}
+
+      <div className="no-print">
+        <StatusBar
+          filePath={activeTabPath}
+          wordCount={wordCount}
+          charCount={source.length}
+          saveStatus={saveStatus}
+          mode={mode}
+          tabCount={tabs.length}
+          zoom={zoom}
+          autoSaveDelay={autoSaveDelay}
+          isReadOnly={activeTab?.isReadOnly ?? false}
+        />
+      </div>
 
       {/* Palette de commandes */}
       <CommandPalette
@@ -274,12 +450,15 @@ function AppContent() {
         mode={mode}
       />
 
-      {/* Recherche full-text */}
+      {/* Recherche full-text vault */}
       <SearchPanel
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
         onOpen={openFileByPath}
       />
+
+      {/* Find in page (Ctrl+F natif) */}
+      <FindBar open={findBarOpen} onClose={() => setFindBarOpen(false)} />
     </div>
   )
 }

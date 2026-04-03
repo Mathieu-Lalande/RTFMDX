@@ -17,17 +17,20 @@ function PaletteIcon({ id }) {
     case 'api':      return <svg {...props}><path d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
     case 'calendar': return <svg {...props}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     case 'layers':   return <svg {...props}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+    case 'clock':    return <svg {...props}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    case 'example':  return <svg {...props}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
     default:         return <svg {...props}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
   }
 }
 
 const BUILTIN_COMMANDS = [
-  { id: 'mode-read',  label: 'Vue : Lecture',   iconId: 'eye',      category: 'Vue' },
-  { id: 'mode-split', label: 'Vue : Split',      iconId: 'columns',  category: 'Vue' },
-  { id: 'mode-edit',  label: 'Vue : Édition',    iconId: 'edit',     category: 'Vue' },
-  { id: 'new-file',   label: 'Nouveau fichier',  iconId: 'file-new', category: 'Fichier' },
-  { id: 'open-vault', label: 'Ouvrir un vault',  iconId: 'folder',   category: 'Vault' },
-  { id: 'save',       label: 'Sauvegarder',      iconId: 'save',     category: 'Fichier' },
+  { id: 'mode-read',              label: 'Vue : Lecture',             iconId: 'eye',      category: 'Vue' },
+  { id: 'mode-split',             label: 'Vue : Split',               iconId: 'columns',  category: 'Vue' },
+  { id: 'mode-edit',              label: 'Vue : Édition',             iconId: 'edit',     category: 'Vue' },
+  { id: 'new-file',               label: 'Nouveau fichier',           iconId: 'file-new', category: 'Fichier' },
+  { id: 'open-vault',             label: 'Ouvrir un vault',           iconId: 'folder',   category: 'Vault' },
+  { id: 'save',                   label: 'Sauvegarder',               iconId: 'save',     category: 'Fichier' },
+  { id: 'open-builtin-example',   label: "Ouvrir l'exemple intégré",  iconId: 'example',  category: 'Fichier' },
 ]
 
 const TEMPLATES = [
@@ -322,7 +325,7 @@ function highlight(text, query) {
 }
 
 export default function CommandPalette({ open, onClose, onAction, mode }) {
-  const { vaultFiles, openFileByPath, createFile, openVault } = useVault()
+  const { vaultFiles, openFileByPath, createFile, openVault, recentFiles, openBuiltinExample } = useVault()
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
   const inputRef = useRef(null)
@@ -343,6 +346,7 @@ export default function CommandPalette({ open, onClose, onAction, mode }) {
     }))
     const cmds = BUILTIN_COMMANDS.map(c => {
       if (c.id === 'open-vault') return { ...c, action: openVault }
+      if (c.id === 'open-builtin-example') return { ...c, action: () => openBuiltinExample() }
       if (c.id === 'new-file') return {
         ...c,
         action: async () => {
@@ -364,11 +368,19 @@ export default function CommandPalette({ open, onClose, onAction, mode }) {
         }
       }
     }))
+    const recents = (recentFiles || []).map(r => ({
+      id: `recent:${r.path}`,
+      label: r.name.replace(/\.(mdx?|md)$/, ''),
+      subtitle: r.path,
+      iconId: 'clock',
+      category: 'Récents',
+      action: () => openFileByPath(r.path),
+    }))
 
-    const all = [...cmds, ...tpls, ...files]
-    const filtered = q ? all.filter(i => i.label.toLowerCase().includes(q) || i.category.toLowerCase().includes(q)) : all
+    const all = [...cmds, ...recents, ...tpls, ...files]
+    const filtered = q ? all.filter(i => i.label.toLowerCase().includes(q) || i.category.toLowerCase().includes(q) || (i.subtitle && i.subtitle.toLowerCase().includes(q))) : all
     return filtered
-  }, [query, vaultFiles, openFileByPath, createFile, openVault, onAction])
+  }, [query, vaultFiles, openFileByPath, createFile, openVault, onAction, recentFiles, openBuiltinExample])
 
   // Scroll l'item sélectionné dans la vue
   useEffect(() => {
@@ -457,8 +469,15 @@ export default function CommandPalette({ open, onClose, onAction, mode }) {
                 <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center', color: g.idx === selected ? 'var(--accent-hover)' : 'var(--text-muted)' }}>
                   <PaletteIcon id={g.item.iconId} />
                 </span>
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {highlight(g.item.label, query)}
+                <span style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                  <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {highlight(g.item.label, query)}
+                  </span>
+                  {g.item.subtitle && (
+                    <span style={{ display: 'block', fontSize: '10px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>
+                      {g.item.subtitle}
+                    </span>
+                  )}
                 </span>
                 {g.idx === selected && (
                   <kbd style={{ fontSize: '10px', color: 'var(--text-muted)', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: '4px', padding: '2px 6px', flexShrink: 0 }}>↵</kbd>

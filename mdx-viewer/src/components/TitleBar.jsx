@@ -36,7 +36,11 @@ const MODE_CONFIG = [
   }
 ]
 
-export default function TitleBar({ fileName, isDirty, onSave, onOpen, saveStatus, mode, onModeChange, canBack, canForward, onBack, onForward, onOpenPalette, onOpenSearch }) {
+export default function TitleBar({
+  fileName, isDirty, onSave, onOpen, saveStatus, mode, onModeChange,
+  canBack, canForward, onBack, onForward, onOpenPalette, onOpenSearch,
+  theme, onToggleTheme, onPrint, outlineOpen, onToggleOutline
+}) {
   const [isMaximized, setIsMaximized] = useState(false)
 
   useEffect(() => {
@@ -79,7 +83,7 @@ export default function TitleBar({ fileName, isDirty, onSave, onOpen, saveStatus
         <NavBtn onClick={onForward} disabled={!canForward} title="Suivant (Alt+→)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
         </NavBtn>
-        <NavBtn onClick={onOpenSearch} title="Recherche (Ctrl+F)">
+        <NavBtn onClick={onOpenSearch} title="Recherche dans le vault (Ctrl+H)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </NavBtn>
         <NavBtn onClick={onOpenPalette} title="Palette (Ctrl+P)">
@@ -120,7 +124,7 @@ export default function TitleBar({ fileName, isDirty, onSave, onOpen, saveStatus
         borderRadius: '7px',
         padding: '3px',
         gap: '2px',
-        marginRight: '12px',
+        marginRight: '8px',
         flexShrink: 0
       }}>
         {MODE_CONFIG.map(({ key, label, title, icon }) => (
@@ -133,6 +137,43 @@ export default function TitleBar({ fileName, isDirty, onSave, onOpen, saveStatus
             label={label}
           />
         ))}
+      </div>
+
+      {/* Extra controls: Outline, Print, Theme */}
+      <div style={{ display: 'flex', gap: '2px', WebkitAppRegion: 'no-drag', flexShrink: 0, marginRight: '8px' }}>
+        <NavBtn onClick={onToggleOutline} title="Plan / Outline (Ctrl+Shift+O)" active={outlineOpen}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="15" y2="12"/>
+            <line x1="3" y1="18" x2="18" y2="18"/>
+          </svg>
+        </NavBtn>
+        <NavBtn onClick={onPrint} title="Imprimer / Exporter PDF">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="6 9 6 2 18 2 18 9"/>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <rect x="6" y="14" width="12" height="8"/>
+          </svg>
+        </NavBtn>
+        <NavBtn onClick={onToggleTheme} title={theme === 'dark' ? 'Thème clair' : 'Thème sombre'}>
+          {theme === 'dark' ? (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="5"/>
+              <line x1="12" y1="1" x2="12" y2="3"/>
+              <line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="3" y2="12"/>
+              <line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+          ) : (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          )}
+        </NavBtn>
       </div>
 
       {/* Boutons fenêtre Windows */}
@@ -191,11 +232,11 @@ function ModeButton({ active, onClick, title, icon, label }) {
   )
 }
 
-function NavBtn({ children, onClick, disabled, title }) {
+function NavBtn({ children, onClick, disabled, title, active }) {
   return (
     <button onClick={onClick} title={title} disabled={disabled} style={{
-      background: 'transparent', border: 'none',
-      color: disabled ? 'var(--text-muted)' : 'var(--text-secondary)',
+      background: active ? 'var(--accent-soft)' : 'transparent', border: 'none',
+      color: disabled ? 'var(--text-muted)' : active ? 'var(--accent-hover)' : 'var(--text-secondary)',
       cursor: disabled ? 'default' : 'pointer',
       padding: '5px 7px', borderRadius: '5px',
       display: 'flex', alignItems: 'center',
@@ -203,7 +244,10 @@ function NavBtn({ children, onClick, disabled, title }) {
       transition: 'all 0.15s', WebkitAppRegion: 'no-drag',
     }}
       onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}}
-      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = disabled ? 'var(--text-muted)' : 'var(--text-secondary)' }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = active ? 'var(--accent-soft)' : 'transparent'
+        e.currentTarget.style.color = disabled ? 'var(--text-muted)' : active ? 'var(--accent-hover)' : 'var(--text-secondary)'
+      }}
     >{children}</button>
   )
 }

@@ -5,8 +5,13 @@ contextBridge.exposeInMainWorld('electron', {
   compileMdx: (source, filePath) => ipcRenderer.invoke('compile-mdx', source, filePath),
   searchVault: (query) => ipcRenderer.invoke('search-vault', query),
 
+  // Config
+  getConfig: () => ipcRenderer.invoke('get-config'),
+  saveConfig: (updates) => ipcRenderer.invoke('save-config', updates),
+
   // Vault
   openVault: () => ipcRenderer.invoke('open-vault'),
+  setVault: (dirPath) => ipcRenderer.invoke('set-vault', dirPath),
   getVault: () => ipcRenderer.invoke('get-vault'),
   getVaultTree: () => ipcRenderer.invoke('get-vault-tree'),
   readVaultFile: (filePath) => ipcRenderer.invoke('read-vault-file', filePath),
@@ -15,8 +20,12 @@ contextBridge.exposeInMainWorld('electron', {
   renameFile: (opts) => ipcRenderer.invoke('rename-file', opts),
   deleteFile: (filePath) => ipcRenderer.invoke('delete-file', filePath),
   deleteFolder: (folderPath) => ipcRenderer.invoke('delete-folder', folderPath),
+  duplicateFile: (filePath) => ipcRenderer.invoke('duplicate-file', filePath),
   resolveWikiLink: (name) => ipcRenderer.invoke('resolve-wiki-link', name),
   getVaultFiles: () => ipcRenderer.invoke('get-vault-files'),
+
+  // Fichier intégré
+  getBuiltinExample: () => ipcRenderer.invoke('get-builtin-example'),
 
   // Événements vault → renderer
   onVaultChanged: (cb) => ipcRenderer.on('vault-changed', (_, tree) => cb(tree)),
@@ -33,4 +42,14 @@ contextBridge.exposeInMainWorld('electron', {
   windowMaximize: () => ipcRenderer.invoke('window-maximize'),
   windowClose: () => ipcRenderer.invoke('window-close'),
   windowIsMaximized: () => ipcRenderer.invoke('window-is-maximized'),
+
+  // Auto-update
+  onUpdateAvailable: (cb) => ipcRenderer.on('update-available', () => cb()),
+  onUpdateDownloaded: (cb) => ipcRenderer.on('update-downloaded', () => cb()),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+
+  // Find in page (natif Electron)
+  findInPage: (text, forward, findNext) => ipcRenderer.send('find-in-page', text, forward, findNext),
+  stopFindInPage: () => ipcRenderer.send('stop-find-in-page'),
+  onFoundInPage: (cb) => ipcRenderer.on('found-in-page', (_, result) => cb(result)),
 })
