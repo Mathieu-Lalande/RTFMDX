@@ -1,11 +1,11 @@
 ---
-title: Référence complète MDX Viewer
+title: Référence complète MXT Viewer
 date: 2026-04-03
-tags: [référence, mdx, composants, documentation]
+tags: [référence, MXT, composants, documentation]
 author: Mathieu Lalande
 ---
 
-# Référence MDX Viewer
+# Référence MXT Viewer
 
 Guide complet de toutes les fonctionnalités disponibles. Utilisez ce fichier comme **cheat sheet** permanent.
 
@@ -78,7 +78,7 @@ Cinq types disponibles :
 
 <Steps>
   - Ouvrez un **vault** via la sidebar (icône dossier en haut à gauche)
-  - Cliquez sur **+** pour créer un nouveau fichier `.mdx`
+  - Cliquez sur **+** pour créer un nouveau fichier `.MXT`
   - Passez en mode **Split** (Ctrl+E) pour voir l'éditeur et l'aperçu côte à côte
   - Utilisez `[[nom-fichier]]` pour créer des liens entre fichiers
   - **Ctrl+S** pour sauvegarder
@@ -145,7 +145,7 @@ def fibonacci(n: int) -> list[int]:
 <Tabs>
   <Tab label="Installation">
     ```bash
-    cd mdx-viewer
+    cd MXT-viewer
     npm install
     npm run dev
     ```
@@ -162,9 +162,9 @@ def fibonacci(n: int) -> list[int]:
   <Tab label="Production">
     ```bash
     npm run build
-    # → dist-electron/MDX Viewer Setup.exe
+    # → dist-electron/MXT Viewer Setup.exe
     ```
-    L'installeur enregistre l'association `.mdx` → MDX Viewer dans Windows.
+    L'installeur enregistre l'association `.MXT` → MXT Viewer dans Windows.
   </Tab>
 </Tabs>
 
@@ -176,7 +176,7 @@ def fibonacci(n: int) -> list[int]:
   Les Cards acceptent un `title`, un `icon` (emoji ou texte), et un `href` pour être cliquables.
 </Card>
 
-<Card title="Lien externe" icon="🔗" href="https://mdxjs.com">
+<Card title="Lien externe" icon="🔗" href="https://MXTjs.com">
   Avec `href`, la carte devient cliquable et ouvre dans le navigateur système.
 </Card>
 
@@ -207,9 +207,9 @@ Les liens wiki connectent vos fichiers entre eux — cliquez pour naviguer :
 
 Les tags sont extraits automatiquement depuis le **frontmatter** et le contenu.
 
-Dans le frontmatter : `tags: [référence, mdx, documentation]`
+Dans le frontmatter : `tags: [référence, MXT, documentation]`
 
-Dans le texte : #tag-inline #documentation #mdx-viewer
+Dans le texte : #tag-inline #documentation #MXT-viewer
 
 ---
 
@@ -260,7 +260,7 @@ Les chemins relatifs sont résolus automatiquement depuis l'emplacement du fichi
 
 <Callout type="tip" title="Workflow recommandé">
   1. Ouvrez votre vault (dossier de docs) depuis la sidebar
-  2. Créez vos fichiers `.mdx` avec le bouton **+**
+  2. Créez vos fichiers `.MXT` avec le bouton **+**
   3. Liez-les avec `[[nom-fichier]]`
   4. Utilisez le mode **Lecture** pour naviguer, **Split** pour éditer
 </Callout>

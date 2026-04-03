@@ -20,7 +20,7 @@ Un wiki link `[[nom-fichier]]` crée un lien cliquable vers n'importe quel fichi
 
 | Syntaxe | Résultat |
 |---------|----------|
-| `[[exemple]]` | Lien vers `exemple.mdx` |
+| `[[exemple]]` | Lien vers `exemple.MXT` |
 | `[[exemple\|texte libre]]` | Même lien, label personnalisé |
 | `[[fichier-absent]]` | Lien en jaune — fichier introuvable |
 
@@ -30,7 +30,7 @@ Un wiki link `[[nom-fichier]]` crée un lien cliquable vers n'importe quel fichi
 
 <CardGrid>
   <Card title="Référence complète" icon="book">
-    [[exemple]] — tous les composants, syntaxes MDX et raccourcis clavier disponibles dans l'application.
+    [[exemple]] — tous les composants, syntaxes MXT et raccourcis clavier disponibles dans l'application.
   </Card>
   <Card title="Ce fichier" icon="link">
     [[exemple-projet]] — démo de la navigation inter-fichiers et des backlinks.
@@ -97,7 +97,7 @@ affiche automatiquement `exemple` comme référent — sans configuration.
 
 <Callout type="success" title="Prêt à construire votre vault ?">
   1. Ouvrez votre dossier comme vault via la sidebar
-  2. Créez vos fichiers `.mdx` avec le bouton **+** ou **Ctrl+P → Template**
+  2. Créez vos fichiers `.MXT` avec le bouton **+** ou **Ctrl+P → Template**
   3. Reliez-les avec `[[nom-fichier]]`
   4. La navigation et les backlinks fonctionnent immédiatement
 
