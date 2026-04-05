@@ -185,24 +185,36 @@ app.whenReady().then(() => {
   createWindow()
 
   // ── Auto-updater ────────────────────────────────────────────────────────
+  let _updateStatus = null // 'available' | 'downloaded' | { error: string }
   if (autoUpdater) {
     try {
       autoUpdater.on('update-available', () => {
+        _updateStatus = 'available'
         mainWindow?.webContents.send('update-available')
       })
       autoUpdater.on('update-downloaded', () => {
+        _updateStatus = 'downloaded'
         mainWindow?.webContents.send('update-downloaded')
       })
       autoUpdater.on('error', (err) => {
+        _updateStatus = { error: err.message }
         mainWindow?.webContents.send('update-error', err.message)
       })
       autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+        _updateStatus = { error: err.message }
         mainWindow?.webContents.send('update-error', err.message)
       })
     } catch (e) {
-      mainWindow?.webContents.send('update-error', e.message)
+      _updateStatus = { error: e.message }
     }
   }
+  // Renderer peut demander le statut après son chargement
+  ipcMain.handle('get-update-status', () => {
+    if (!_updateStatus) return null
+    if (_updateStatus === 'available') return { type: 'available' }
+    if (_updateStatus === 'downloaded') return { type: 'downloaded' }
+    return { type: 'error', message: _updateStatus.error }
+  })
 
   // MXT compilation (source + chemin du fichier courant pour résoudre les images)
   ipcMain.handle('compile-mxt', async (_, source, filePath) => {

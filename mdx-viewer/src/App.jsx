@@ -319,6 +319,13 @@ function AppContent() {
     window.electron.onUpdateAvailable(() => setUpdateBanner('available'))
     window.electron.onUpdateDownloaded(() => setUpdateBanner('downloaded'))
     window.electron.onUpdateError((msg) => setUpdateBanner('error:' + msg))
+    // Récupère le statut déjà connu (si l'event a été émis avant le chargement du renderer)
+    window.electron.getUpdateStatus().then(s => {
+      if (!s) return
+      if (s.type === 'available') setUpdateBanner('available')
+      else if (s.type === 'downloaded') setUpdateBanner('downloaded')
+      else if (s.type === 'error') setUpdateBanner('error:' + s.message)
+    })
   }, [])
 
   const source = activeTab?.content ?? ''
