@@ -1,6 +1,6 @@
 {
   "name": "mxt-viewer",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Viewer/éditeur MXT natif Windows",
   "main": "electron/main.js",
   "scripts": {

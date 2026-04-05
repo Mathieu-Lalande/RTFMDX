@@ -3,7 +3,10 @@ name: Build & Release
 on:
   push:
     tags:
-      - 'v*'  # Se déclenche sur les tags comme v1.0.8, v2.0.0, etc.
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -29,6 +32,6 @@ jobs:
 
       - name: Build + Publication vers GitHub Releases
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: npm run build -- --publish always
