@@ -11,7 +11,7 @@ export default function StatusBar({ filePath, wordCount, charCount, saveStatus, 
       gap: '16px',
       flexShrink: 0,
       fontSize: '11px',
-      color: 'var(--text-muted)',
+      color: 'var(--text-secondary)',
       userSelect: 'none'
     }}>
       {/* Chemin */}
@@ -27,7 +27,7 @@ export default function StatusBar({ filePath, wordCount, charCount, saveStatus, 
 
       <div style={{ display: 'flex', gap: '16px', flexShrink: 0, alignItems: 'center' }}>
         {gitRepoPath && (
-          <span style={{ color: 'var(--green)', opacity: 0.7 }}>Git sync</span>
+          <span style={{ color: 'var(--green)' }}>Git sync</span>
         )}
         {isReadOnly && (
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--yellow)' }}>
@@ -35,7 +35,7 @@ export default function StatusBar({ filePath, wordCount, charCount, saveStatus, 
           </span>
         )}
         {autoSaveDelay > 0 && (
-          <span style={{ color: 'var(--green)', opacity: 0.7 }}>Auto-save activé</span>
+          <span style={{ color: 'var(--green)' }}>Auto-save activé</span>
         )}
         {zoom !== undefined && zoom !== 1.0 && (
           <span>{Math.round(zoom * 100)}%</span>

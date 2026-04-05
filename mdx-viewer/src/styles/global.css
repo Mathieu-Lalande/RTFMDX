@@ -33,10 +33,26 @@
   --bg-secondary: #f4f6f9;
   --bg-tertiary: #ebedf2;
   --bg-hover: #e0e4ec;
-  --border: #d1d5de;
+  --border: #c8cdd8;
   --text-primary: #111827;
   --text-secondary: #374151;
-  --text-muted: #9ca3af;
+  --text-muted: #6b7280;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-soft: rgba(79, 70, 229, 0.09);
+  --green: #059669;
+  --yellow: #d97706;
+  --red: #dc2626;
+  --blue: #2563eb;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+}
+
+/* H1 gradient invisible sur fond blanc → couleurs sombres en thème clair */
+[data-theme="light"] .prose h1 {
+  background: linear-gradient(135deg, #1e293b 0%, #4f46e5 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 html, body, #root {
