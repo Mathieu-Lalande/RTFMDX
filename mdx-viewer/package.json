@@ -48,7 +48,7 @@
     "publish": {
       "provider": "github",
       "owner": "Mathieu-Lalande",
-      "repo": "RTFMXT"
+      "repo": "RTFMDX"
     }
   },
   "dependencies": {
