@@ -163,10 +163,11 @@ function createWindow() {
       contextIsolation: true, nodeIntegration: false
     }
   })
-  const prodUrl = `file://${path.join(__dirname, '../dist/index.html')}`
-  mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL || prodUrl)
   if (process.env.VITE_DEV_SERVER_URL) {
+    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
     mainWindow.webContents.openDevTools({ mode: 'detach' })
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
