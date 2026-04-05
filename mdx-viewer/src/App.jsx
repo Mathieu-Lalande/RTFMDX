@@ -318,6 +318,7 @@ function AppContent() {
   useEffect(() => {
     window.electron.onUpdateAvailable(() => setUpdateBanner('available'))
     window.electron.onUpdateDownloaded(() => setUpdateBanner('downloaded'))
+    window.electron.onUpdateError((msg) => setUpdateBanner('error:' + msg))
   }, [])
 
   const source = activeTab?.content ?? ''
@@ -577,7 +578,7 @@ function AppContent() {
       {updateBanner && (
         <div style={{
           padding: '8px 16px',
-          background: updateBanner === 'downloaded' ? 'var(--accent-soft)' : 'rgba(16,185,129,0.1)',
+          background: updateBanner === 'downloaded' ? 'var(--accent-soft)' : updateBanner?.startsWith('error:') ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)',
           borderTop: '1px solid var(--border)',
           display: 'flex', alignItems: 'center', gap: '12px',
           fontSize: '12px', color: 'var(--text-secondary)', flexShrink: 0,
@@ -589,6 +590,8 @@ function AppContent() {
           <span style={{ flex: 1 }}>
             {updateBanner === 'downloaded'
               ? 'Mise à jour téléchargée — Redémarrez pour installer'
+              : updateBanner?.startsWith('error:')
+              ? `Erreur mise à jour : ${updateBanner.slice(6)}`
               : 'Mise à jour disponible — Téléchargement en cours…'}
           </span>
           {updateBanner === 'downloaded' && (

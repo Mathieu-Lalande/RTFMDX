@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('electron', {
   // Auto-update
   onUpdateAvailable: (cb) => ipcRenderer.on('update-available', () => cb()),
   onUpdateDownloaded: (cb) => ipcRenderer.on('update-downloaded', () => cb()),
+  onUpdateError: (cb) => ipcRenderer.on('update-error', (_, msg) => cb(msg)),
   installUpdate: () => ipcRenderer.invoke('install-update'),
 
   // Find in page (natif Electron)

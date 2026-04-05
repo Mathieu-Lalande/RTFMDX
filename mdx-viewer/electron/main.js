@@ -193,8 +193,15 @@ app.whenReady().then(() => {
       autoUpdater.on('update-downloaded', () => {
         mainWindow?.webContents.send('update-downloaded')
       })
-      autoUpdater.checkForUpdatesAndNotify().catch(() => {})
-    } catch {}
+      autoUpdater.on('error', (err) => {
+        mainWindow?.webContents.send('update-error', err.message)
+      })
+      autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+        mainWindow?.webContents.send('update-error', err.message)
+      })
+    } catch (e) {
+      mainWindow?.webContents.send('update-error', e.message)
+    }
   }
 
   // MXT compilation (source + chemin du fichier courant pour résoudre les images)
