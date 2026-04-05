@@ -509,7 +509,7 @@ function AppContent() {
 
           <div ref={contentRef} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
             {/* Éditeur */}
-            {isEditorVisible && (
+            {isEditorVisible && activeTab && (
               <div style={{ width: mode === 'edit' ? '100%' : `${panelWidth}%`, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
                 <Editor
                   value={source}
