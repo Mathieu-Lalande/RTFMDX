@@ -10,19 +10,20 @@ export default function GitConnect({ onRepositoryOpened, onClose }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [files, setFiles] = useState([])
-  const [step, setStep] = useState('browse') // browse | select
+  const [step, setStep] = useState('browse') // browse | select | vault
+  const [vaultChoice, setVaultChoice] = useState(null) // null | 'repo' | 'custom'
+  const [customVaultPath, setCustomVaultPath] = useState('')
 
   const handleBrowseDirectory = async () => {
     setLoading(true)
     setError('')
     try {
-      const result = await window.electron.openVault?.()
+      // Browse sans toucher au vault
+      const result = await window.electron.browseDirectory?.()
       if (result?.ok) {
-        const dirPath = result.vaultPath
-        // Vérifier si c'est un repo git
+        const dirPath = result.dirPath
         const repoCheck = await window.electron.gitDetectRepo(dirPath)
         if (repoCheck?.isRepo) {
-          // Charger les fichiers .md
           const filesResult = await window.electron.gitGetMarkdownFiles(dirPath)
           setFiles(filesResult?.files || [])
           setRepoDir(dirPath)
@@ -30,7 +31,6 @@ export default function GitConnect({ onRepositoryOpened, onClose }) {
         } else {
           setError('Attention : Ce répertoire n\'est pas un repo Git. Continuez quand même ?')
           setRepoDir(dirPath)
-          // Charger les fichiers quand même
           const filesResult = await window.electron.gitGetMarkdownFiles(dirPath)
           setFiles(filesResult?.files || [])
           setStep('select')
@@ -46,27 +46,56 @@ export default function GitConnect({ onRepositoryOpened, onClose }) {
   const handleSelectFile = async (file) => {
     setLoading(true)
     setError('')
-
     try {
       const result = await window.electron.gitReadMd(file.path)
       if (result.ok) {
-        // Sauvegarder le repo path
-        window.electron.saveConfig({ gitRepoPath: repoDir }).catch(err => console.error('[config] Échec de la sauvegarde du repo git:', err))
-
-        onRepositoryOpened({
-          file,
-          content: result.content,
-          repoDir,
-        })
-        onClose()
+        window.electron.saveConfig({ gitRepoPath: repoDir }).catch(err => console.error('[config] Échec sauvegarde repo git:', err))
+        onRepositoryOpened({ file, content: result.content, repoDir })
+        // Aller à l'étape vault
+        setStep('vault')
+        setLoading(false)
       } else {
         setError(result.error || 'Impossible de lire le fichier')
+        setLoading(false)
+      }
+    } catch (err) {
+      setError(err.message)
+      setLoading(false)
+    }
+  }
+
+  const handleUseRepoAsVault = async () => {
+    setLoading(true)
+    try {
+      await window.electron.setVault?.(repoDir)
+      setVaultChoice('repo')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+      onClose()
+    }
+  }
+
+  const handleChooseCustomVault = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const result = await window.electron.openVault?.()
+      if (result?.ok) {
+        setCustomVaultPath(result.vaultPath)
+        setVaultChoice('custom')
+        onClose()
       }
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSkipVault = () => {
+    onClose()
   }
 
   return (
@@ -193,7 +222,7 @@ export default function GitConnect({ onRepositoryOpened, onClose }) {
 
             <div>
               <p style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', margin: '12px 0 8px 0', textTransform: 'uppercase' }}>
-                {files.length} Fichier{files.length !== 1 ? 's' : ''} Mark down trouvé{files.length !== 1 ? 's' : ''}
+                {files.length} Fichier{files.length !== 1 ? 's' : ''} Markdown trouvé{files.length !== 1 ? 's' : ''}
               </p>
 
               <div style={{ maxHeight: '300px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -286,6 +315,109 @@ export default function GitConnect({ onRepositoryOpened, onClose }) {
             >
               ← Retour
             </button>
+          </div>
+        )}
+
+        {step === 'vault' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 4px 0', lineHeight: '1.5' }}>
+              Où souhaitez-vous définir votre vault ?
+            </p>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 12px 0', lineHeight: '1.4', opacity: 0.7 }}>
+              Le vault est le dossier affiché dans la barre latérale pour gérer vos fichiers.
+            </p>
+
+            {/* Option 1 : utiliser le repo git comme vault */}
+            <button
+              onClick={handleUseRepoAsVault}
+              disabled={loading}
+              style={{
+                textAlign: 'left',
+                padding: '14px 16px',
+                background: 'var(--bg-hover)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                color: 'var(--text-primary)',
+                cursor: loading ? 'default' : 'pointer',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '12px',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'var(--accent-soft)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-hover)' }}
+            >
+              <div style={{ marginTop: '1px', color: 'var(--accent)' }}>{Icons.git}</div>
+              <div>
+                <div style={{ fontWeight: '600', marginBottom: '4px' }}>Utiliser le répertoire Git</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>{repoDir}</div>
+              </div>
+            </button>
+
+            {/* Option 2 : choisir un autre dossier */}
+            <button
+              onClick={handleChooseCustomVault}
+              disabled={loading}
+              style={{
+                textAlign: 'left',
+                padding: '14px 16px',
+                background: 'var(--bg-hover)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                color: 'var(--text-primary)',
+                cursor: loading ? 'default' : 'pointer',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '12px',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'var(--accent-soft)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-hover)' }}
+            >
+              <div style={{ marginTop: '1px', color: 'var(--accent)' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+              </div>
+              <div>
+                <div style={{ fontWeight: '600', marginBottom: '4px' }}>Choisir un autre emplacement…</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Ouvrir ou créer un dossier vault n'importe où sur l'ordinateur
+                </div>
+              </div>
+            </button>
+
+            {/* Option 3 : passer */}
+            <button
+              onClick={handleSkipVault}
+              style={{
+                padding: '10px 16px',
+                background: 'transparent',
+                color: 'var(--text-muted)',
+                border: '1px solid var(--border)',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                marginTop: '4px',
+              }}
+            >
+              Continuer sans vault
+            </button>
+
+            {error && (
+              <div style={{
+                padding: '10px 12px',
+                background: 'rgba(239,68,68,0.1)',
+                border: '1px solid rgba(239,68,68,0.5)',
+                borderRadius: '6px',
+                color: '#ef4444',
+                fontSize: '12px',
+              }}>
+                {error}
+              </div>
+            )}
           </div>
         )}
       </div>

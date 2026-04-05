@@ -1,13 +1,16 @@
 {
   "name": "mxt-viewer",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "Viewer/éditeur MXT natif Windows",
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 node scripts/launch-electron.js\"",
     "build": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false vite build && electron-builder",
     "preview": "vite preview",
-    "start": "node scripts/launch-electron.js"
+    "start": "node scripts/launch-electron.js",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run"
   },
   "build": {
     "appId": "com.mxtviewer.app",
@@ -43,8 +46,14 @@
       "assets/**/*"
     ],
     "extraResources": [
-      { "from": "../exemple.mxt", "to": "exemple.mxt" },
-      { "from": "../exemple-projet.mxt", "to": "exemple-projet.mxt" }
+      {
+        "from": "../exemple.mxt",
+        "to": "exemple.mxt"
+      },
+      {
+        "from": "../exemple-projet.mxt",
+        "to": "exemple-projet.mxt"
+      }
     ],
     "publish": {
       "provider": "github",
@@ -58,6 +67,9 @@
     "@codemirror/language-data": "^6.5.2",
     "@lezer/highlight": "^1.2.3",
     "@mdx-js/mdx": "^3.1.0",
+    "@uiw/codemirror-themes": "^4.25.9",
+    "@uiw/react-codemirror": "^4.23.7",
+    "electron-updater": "^6.3.9",
     "micromark-extension-gfm-autolink-literal": "^2.1.0",
     "micromark-extension-gfm-footnote": "^2.1.0",
     "micromark-extension-gfm-strikethrough": "^2.1.0",
@@ -66,9 +78,6 @@
     "micromark-extension-gfm-task-list-item": "^2.1.0",
     "micromark-extension-mdxjs-esm": "^3.0.0",
     "micromark-util-subtokenize": "^2.1.0",
-    "@uiw/codemirror-themes": "^4.25.9",
-    "@uiw/react-codemirror": "^4.23.7",
-    "electron-updater": "^6.3.9",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "rehype-highlight": "^7.0.2",
@@ -76,12 +85,18 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/ui": "^4.1.2",
     "concurrently": "^9.1.2",
     "cross-env": "^10.1.0",
     "electron": "^33.4.0",
     "electron-builder": "^25.1.8",
+    "jsdom": "^29.0.1",
     "vite": "^6.0.11",
+    "vitest": "^4.1.2",
     "wait-on": "^8.0.3"
   }
 }

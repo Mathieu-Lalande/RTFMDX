@@ -277,14 +277,24 @@ app.whenReady().then(() => {
   // ── Vault ──────────────────────────────────────────────────────────────
   ipcMain.handle('open-vault', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory'],
-      title: 'Ouvrir un vault'
+      properties: ['openDirectory', 'createDirectory'],
+      title: 'Ouvrir ou créer un vault'
     })
     if (result.canceled || !result.filePaths[0]) return { ok: false }
     vaultPath = result.filePaths[0]
     saveConfig({ ...loadConfig(), vaultPath })
     watchVault(mainWindow)
     return { ok: true, vaultPath, tree: getVaultTree(vaultPath) }
+  })
+
+  // Ouvre un sélecteur de dossier sans toucher au vault (pour git, etc.)
+  ipcMain.handle('browse-directory', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory'],
+      title: 'Sélectionner un répertoire'
+    })
+    if (result.canceled || !result.filePaths[0]) return { ok: false }
+    return { ok: true, dirPath: result.filePaths[0] }
   })
 
   ipcMain.handle('set-vault', (_, dirPath) => {
