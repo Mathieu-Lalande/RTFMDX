@@ -1,6 +1,6 @@
 {
   "name": "mxt-viewer",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Viewer/éditeur MXT natif Windows",
   "main": "electron/main.js",
   "scripts": {
@@ -49,7 +49,9 @@
     "publish": {
       "provider": "github",
       "owner": "Mathieu-Lalande",
-      "repo": "RTFMDX"
+      "repo": "RTFMDX",
+      "draft": false,
+      "releaseType": "release"
     }
   },
   "dependencies": {
