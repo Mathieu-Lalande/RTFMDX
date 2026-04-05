@@ -188,9 +188,16 @@ app.whenReady().then(() => {
   let _updateStatus = null // 'available' | 'downloaded' | { error: string }
   if (autoUpdater) {
     try {
-      autoUpdater.on('update-available', () => {
+      autoUpdater.logger = null // désactive le logger interne
+      autoUpdater.on('checking-for-update', () => {
+        // Simple vérification, pas d'erreur
+      })
+      autoUpdater.on('update-available', (info) => {
         _updateStatus = 'available'
         mainWindow?.webContents.send('update-available')
+      })
+      autoUpdater.on('update-not-available', () => {
+        // L'app est à jour, rien à signaler
       })
       autoUpdater.on('update-downloaded', () => {
         _updateStatus = 'downloaded'

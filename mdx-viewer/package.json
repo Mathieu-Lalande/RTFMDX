@@ -1,6 +1,6 @@
 {
   "name": "mxt-viewer",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Viewer/éditeur MXT natif Windows",
   "main": "electron/main.js",
   "scripts": {
@@ -16,6 +16,7 @@
     "directories": {
       "output": "dist-electron"
     },
+    "artifactName": "${productName}-Setup-${version}.${ext}",
     "win": {
       "target": "nsis",
       "fileAssociations": [
