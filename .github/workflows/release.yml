@@ -30,6 +30,9 @@ jobs:
       - name: Installation des dépendances
         run: npm ci
 
+      - name: Build frontend (Vite)
+        run: npx vite build
+
       - name: Build + Publication vers GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
