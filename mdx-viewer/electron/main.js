@@ -24,6 +24,17 @@ function saveConfig(data) {
 let vaultPath = null
 let vaultWatcher = null
 
+// Validates that a path is strictly inside the vault (prevents path traversal)
+function assertInsideVault(filePath) {
+  if (!vaultPath) throw new Error('Aucun vault ouvert')
+  const resolved = path.resolve(filePath)
+  const vaultResolved = path.resolve(vaultPath)
+  if (resolved !== vaultResolved && !resolved.startsWith(vaultResolved + path.sep)) {
+    throw new Error('Accès refusé : chemin hors du vault')
+  }
+  return resolved
+}
+
 function getVaultTree(dir) {
   const IGNORE = new Set(['node_modules', '.git', '.vite', 'dist', 'dist-electron'])
   const entries = fs.readdirSync(dir, { withFileTypes: true })
@@ -83,7 +94,10 @@ async function getCompiler() {
       // Wiki links [[filename]] → <WikiLink href="filename">label</WikiLink>
       body = body.replace(
         /\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g,
-        (_, href, label) => `<WikiLink href="${href.trim()}">${(label || href).trim()}</WikiLink>`
+        (_, href, label) => {
+          const safeHref = href.trim().replace(/["\\<>]/g, c => `&#${c.charCodeAt(0)};`)
+          return `<WikiLink href="${safeHref}">${(label || href).trim()}</WikiLink>`
+        }
       )
 
       // Images relatives → vault:// protocol pour Electron
@@ -125,8 +139,19 @@ function createWindow() {
   // Protocole vault:// pour servir les assets locaux (images, etc.)
   if (!protocol.isProtocolRegistered('vault')) {
     protocol.registerFileProtocol('vault', (request, callback) => {
-      const filePath = decodeURIComponent(request.url.replace('vault://', ''))
-      callback({ path: filePath })
+      try {
+        const raw = decodeURIComponent(request.url.replace('vault://', ''))
+        const filePath = path.normalize(raw)
+        if (vaultPath) {
+          const vaultResolved = path.resolve(vaultPath)
+          const fileResolved = path.resolve(filePath)
+          if (fileResolved !== vaultResolved && !fileResolved.startsWith(vaultResolved + path.sep)) {
+            callback({ error: -10 }) // net::ERR_ACCESS_DENIED
+            return
+          }
+        }
+        callback({ path: filePath })
+      } catch { callback({ error: -2 }) }
     })
   }
 
@@ -265,14 +290,18 @@ app.whenReady().then(() => {
 
   ipcMain.handle('read-vault-file', (_, filePath) => {
     try {
-      return { ok: true, content: fs.readFileSync(filePath, 'utf-8'), name: path.basename(filePath), path: filePath }
+      const resolved = assertInsideVault(filePath)
+      return { ok: true, content: fs.readFileSync(resolved, 'utf-8'), name: path.basename(resolved), path: resolved }
     } catch (e) { return { ok: false, error: e.message } }
   })
 
   ipcMain.handle('create-file', async (_, { dir, name }) => {
     try {
+      const targetDir = dir || vaultPath
+      assertInsideVault(targetDir)
       const base = /\.(md|mxt)$/.test(name) ? name : `${name}.mxt`
-      const filePath = path.join(dir || vaultPath, base)
+      const filePath = path.join(targetDir, base)
+      assertInsideVault(filePath)
       if (fs.existsSync(filePath)) return { ok: false, error: 'Ce fichier existe déjà' }
       fs.writeFileSync(filePath, `# ${name.replace(/\.(mxt|md)$/, '')}\n\n`, 'utf-8')
       return { ok: true, path: filePath, name: base, content: fs.readFileSync(filePath, 'utf-8') }
@@ -281,7 +310,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle('create-folder', async (_, { dir, name }) => {
     try {
-      const folderPath = path.join(dir || vaultPath, name)
+      const targetDir = dir || vaultPath
+      assertInsideVault(targetDir)
+      const folderPath = path.join(targetDir, name)
+      assertInsideVault(folderPath)
       if (fs.existsSync(folderPath)) return { ok: false, error: 'Ce dossier existe déjà' }
       fs.mkdirSync(folderPath, { recursive: true })
       return { ok: true, path: folderPath }
@@ -290,10 +322,12 @@ app.whenReady().then(() => {
 
   ipcMain.handle('rename-file', async (_, { oldPath, newName }) => {
     try {
+      assertInsideVault(oldPath)
       const dir = path.dirname(oldPath)
       const ext = path.extname(oldPath)
       const base = newName.includes('.') ? newName : newName + ext
       const newPath = path.join(dir, base)
+      assertInsideVault(newPath)
       fs.renameSync(oldPath, newPath)
       return { ok: true, newPath, newName: base }
     } catch (e) { return { ok: false, error: e.message } }
@@ -301,9 +335,11 @@ app.whenReady().then(() => {
 
   ipcMain.handle('delete-file', async (_, filePath) => {
     try {
+      assertInsideVault(filePath)
       await shell.trashItem(filePath)
       return { ok: true }
     } catch (e) {
+      if (e.message.includes('hors du vault')) return { ok: false, error: e.message }
       try { fs.unlinkSync(filePath); return { ok: true } }
       catch (e2) { return { ok: false, error: e2.message } }
     }
@@ -311,26 +347,42 @@ app.whenReady().then(() => {
 
   ipcMain.handle('delete-folder', async (_, folderPath) => {
     try {
+      assertInsideVault(folderPath)
       await shell.trashItem(folderPath)
       return { ok: true }
     } catch (e) {
+      if (e.message.includes('hors du vault')) return { ok: false, error: e.message }
       try { fs.rmSync(folderPath, { recursive: true }); return { ok: true } }
       catch (e2) { return { ok: false, error: e2.message } }
     }
   })
 
+  ipcMain.handle('move-file', async (_, { oldPath, newDir }) => {
+    try {
+      assertInsideVault(oldPath)
+      assertInsideVault(newDir)
+      const name = path.basename(oldPath)
+      const newPath = path.join(newDir, name)
+      assertInsideVault(newPath)
+      if (fs.existsSync(newPath)) return { ok: false, error: 'Un fichier avec ce nom existe déjà dans ce dossier' }
+      fs.renameSync(oldPath, newPath)
+      return { ok: true, newPath, name }
+    } catch (e) { return { ok: false, error: e.message } }
+  })
+
   ipcMain.handle('duplicate-file', async (_, filePath) => {
     try {
+      assertInsideVault(filePath)
       const dir = path.dirname(filePath)
       const ext = path.extname(filePath)
       const base = path.basename(filePath, ext)
-      // Find non-colliding name
       let candidate = path.join(dir, `${base}-copie${ext}`)
       if (fs.existsSync(candidate)) {
         let i = 2
         while (fs.existsSync(path.join(dir, `${base}-copie-${i}${ext}`))) i++
         candidate = path.join(dir, `${base}-copie-${i}${ext}`)
       }
+      assertInsideVault(candidate)
       fs.copyFileSync(filePath, candidate)
       return { ok: true, path: candidate, name: path.basename(candidate), content: fs.readFileSync(candidate, 'utf-8') }
     } catch (e) { return { ok: false, error: e.message } }
@@ -378,6 +430,8 @@ app.whenReady().then(() => {
   ipcMain.handle('save-file', (_, { path: p, content }) => {
     try {
       if (!p) return { ok: false, error: 'Pas de chemin' }
+      // When a vault is open, only allow saving inside it
+      if (vaultPath) assertInsideVault(p)
       fs.writeFileSync(p, content, 'utf-8')
       return { ok: true }
     } catch (e) { return { ok: false, error: e.message } }

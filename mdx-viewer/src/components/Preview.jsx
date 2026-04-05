@@ -11,11 +11,25 @@ import { useVault } from '../context/VaultContext.jsx'
 
 const COMPONENTS = {
   Callout, Steps, CodeBlock, Badge, Card, CardGrid, Tabs, Tab, WikiLink,
-  pre: ({ children }) => <div>{children}</div>,
+  pre: ({ children, ...props }) => {
+    // Si l'enfant direct est un <code> avec une classe de langue → CodeBlock
+    const child = Array.isArray(children) ? children[0] : children
+    const lang = child?.props?.className?.replace('language-', '')
+    if (lang) return <CodeBlock language={lang}>{String(child.props.children)}</CodeBlock>
+    // Sinon bloc générique (arbre de fichiers, texte brut…)
+    return (
+      <pre {...props} style={{
+        background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+        borderRadius: '6px', padding: '1rem 1.2rem', overflowX: 'auto',
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontSize: '0.85em',
+        lineHeight: '1.6', whiteSpace: 'pre', color: 'var(--text-secondary)',
+      }}>{children}</pre>
+    )
+  },
   code: ({ className, children }) => {
     const lang = className?.replace('language-', '') || ''
     if (lang) return <CodeBlock language={lang}>{String(children)}</CodeBlock>
-    return <code className={className}>{children}</code>
+    return <code style={{ background: 'var(--bg-secondary)', borderRadius: '3px', padding: '0.1em 0.4em', fontSize: '0.88em', fontFamily: "'JetBrains Mono', monospace" }}>{children}</code>
   }
 }
 

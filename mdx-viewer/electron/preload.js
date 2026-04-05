@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electron', {
   createFile: (opts) => ipcRenderer.invoke('create-file', opts),
   createFolder: (opts) => ipcRenderer.invoke('create-folder', opts),
   renameFile: (opts) => ipcRenderer.invoke('rename-file', opts),
+  moveFile: (opts) => ipcRenderer.invoke('move-file', opts),
   deleteFile: (filePath) => ipcRenderer.invoke('delete-file', filePath),
   deleteFolder: (folderPath) => ipcRenderer.invoke('delete-folder', folderPath),
   duplicateFile: (filePath) => ipcRenderer.invoke('duplicate-file', filePath),

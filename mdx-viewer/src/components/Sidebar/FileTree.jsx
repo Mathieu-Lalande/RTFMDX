@@ -116,10 +116,12 @@ const IcoCopy = () => (
 
 // ─── Item dossier ────────────────────────────────────────────────────────────
 function DirItem({ node, depth, activeFilePath, creating, setCreating }) {
-  const { createFile, createFolder, renameFile, deleteFolder } = useVault()
+  const { createFile, createFolder, renameFile, deleteFolder, moveFile } = useVault()
   const [open, setOpen] = useState(depth < 1)
   const [renaming, setRenaming] = useState(false)
   const [menu, setMenu] = useState(null)
+  const [dragOver, setDragOver] = useState(false)
+  const containerRef = useRef(null)
   const indent = depth * 14
 
   const isCreatingHere = creating?.dir === node.path
@@ -136,9 +138,45 @@ function DirItem({ node, depth, activeFilePath, creating, setCreating }) {
     ]})
   }
 
+  // Handlers sur le conteneur (pas juste le header) pour capturer les drags sur les enfants
+  const handleDragOver = (e) => {
+    if (e.dataTransfer.types.includes('text/x-file-path')) {
+      e.preventDefault()
+      e.stopPropagation() // empêche le dossier parent de voler le drop
+      setDragOver(true)
+    }
+  }
+  const handleDragLeave = (e) => {
+    // Ne désactiver que quand on quitte vraiment le conteneur (pas juste un enfant)
+    if (!containerRef.current?.contains(e.relatedTarget)) {
+      setDragOver(false)
+    }
+  }
+  const handleDrop = async (e) => {
+    e.preventDefault(); e.stopPropagation()
+    setDragOver(false)
+    const oldPath = e.dataTransfer.getData('text/x-file-path')
+    if (!oldPath || oldPath === node.path) return
+    // Empêcher de déplacer un dossier dans lui-même ou un de ses descendants
+    if (node.path === oldPath || node.path.startsWith(oldPath + '\\') || node.path.startsWith(oldPath + '/')) return
+    setOpen(true)
+    await moveFile({ oldPath, newDir: node.path })
+  }
+
   return (
-    <div>
+    <div
+      ref={containerRef}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div
+        draggable
+        onDragStart={e => {
+          e.dataTransfer.setData('text/x-file-path', node.path)
+          e.dataTransfer.effectAllowed = 'move'
+          e.stopPropagation()
+        }}
         onContextMenu={handleContextMenu}
         onClick={() => setOpen(o => !o)}
         style={{
@@ -146,9 +184,11 @@ function DirItem({ node, depth, activeFilePath, creating, setCreating }) {
           padding: `3px 6px 3px ${6 + indent}px`, cursor: 'pointer',
           borderRadius: '5px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '500',
           userSelect: 'none',
+          background: dragOver ? 'var(--accent-soft)' : 'transparent',
+          outline: dragOver ? '1px solid var(--accent)' : 'none',
         }}
-        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+        onMouseEnter={e => { if (!dragOver) e.currentTarget.style.background = 'var(--bg-hover)' }}
+        onMouseLeave={e => { if (!dragOver) e.currentTarget.style.background = 'transparent' }}
       >
         <span style={{ opacity: 0.5, fontSize: '9px', flexShrink: 0, width: '8px' }}>{open ? '▾' : '▸'}</span>
         <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}><IcoFolder color="var(--yellow)" /></span>
@@ -209,6 +249,11 @@ function FileItem({ node, depth, activeFilePath }) {
   return (
     <div>
       <div
+        draggable
+        onDragStart={e => {
+          e.dataTransfer.setData('text/x-file-path', node.path)
+          e.dataTransfer.effectAllowed = 'move'
+        }}
         onContextMenu={handleContextMenu}
         onClick={() => openFileByPath(node.path)}
         style={{

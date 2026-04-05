@@ -78,7 +78,7 @@ function SearchPanel({ open, onClose, onOpen }) {
           {loading && <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Recherche…</div>}
           {!loading && query && !results.length && <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Aucun résultat pour "{query}"</div>}
           {results.map((r) => (
-            <div key={`${r.path}-${r.line}`} onClick={() => { onOpen(r.path); onClose() }}
+            <div key={`${r.path}-${r.line}`} onClick={() => { onOpen(r.path, r.line); onClose() }}
               style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -270,6 +270,26 @@ function AppContent() {
   const previewRef = useRef(null)   // uniquement la zone aperçu (pour DOM highlight)
   const editorViewRef = useRef(null) // instance CodeMirror EditorView (pour CM selection)
   const findBarRef = useRef(null)
+  const pendingScrollLineRef = useRef(null)
+
+  const scrollEditorToLine = useCallback((view, lineNum) => {
+    try {
+      const line = view.state.doc.line(Math.max(1, Math.min(lineNum, view.state.doc.lines)))
+      view.dispatch({ selection: { anchor: line.from, head: line.to }, scrollIntoView: true })
+      view.focus()
+    } catch {}
+  }, [])
+
+  const openAndScrollTo = useCallback(async (filePath, lineNum) => {
+    await openFileByPath(filePath)
+    if (!lineNum) return
+    const attempt = (tries) => {
+      const view = editorViewRef.current
+      if (view) { scrollEditorToLine(view, lineNum) }
+      else if (tries > 1) { setTimeout(() => attempt(tries - 1), 120) }
+    }
+    setTimeout(() => attempt(6), 80)
+  }, [openFileByPath, scrollEditorToLine])
 
   // Load config on startup
   useEffect(() => {
@@ -497,7 +517,13 @@ function AppContent() {
                   }}
                   isReadOnly={activeTab?.isReadOnly ?? false}
                   theme={theme}
-                  onEditorCreated={(view) => { editorViewRef.current = view }}
+                  onEditorCreated={(view) => {
+                    editorViewRef.current = view
+                    if (pendingScrollLineRef.current) {
+                      scrollEditorToLine(view, pendingScrollLineRef.current)
+                      pendingScrollLineRef.current = null
+                    }
+                  }}
                 />
 
               </div>
@@ -615,7 +641,10 @@ function AppContent() {
       <SearchPanel
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
-        onOpen={openFileByPath}
+        onOpen={(filePath, lineNum) => {
+          if (lineNum) pendingScrollLineRef.current = lineNum
+          openAndScrollTo(filePath, lineNum)
+        }}
       />
 
       {/* Find in page (Ctrl+F natif) */}

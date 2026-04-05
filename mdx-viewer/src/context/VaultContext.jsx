@@ -340,6 +340,31 @@ export function VaultProvider({ children }) {
     return result
   }, [closeTab])
 
+  const moveFile = useCallback(async (opts) => {
+    const result = await window.electron.moveFile(opts)
+    if (result.ok) {
+      const oldBase = opts.oldPath
+      const newBase = result.newPath
+      // Met à jour les onglets : fichier direct ou tout le contenu d'un dossier déplacé
+      setTabs(prev => prev.map(t => {
+        if (t.path === oldBase) return { ...t, path: newBase, name: result.name }
+        const sep = t.path.includes('\\') ? '\\' : '/'
+        if (t.path.startsWith(oldBase + sep)) {
+          return { ...t, path: newBase + t.path.slice(oldBase.length) }
+        }
+        return t
+      }))
+      setActiveTabPath(prev => {
+        if (!prev) return prev
+        if (prev === oldBase) return newBase
+        const sep = prev.includes('\\') ? '\\' : '/'
+        if (prev.startsWith(oldBase + sep)) return newBase + prev.slice(oldBase.length)
+        return prev
+      })
+    }
+    return result
+  }, [])
+
   const deleteFolder = useCallback(async (folderPath) => {
     const result = await window.electron.deleteFolder(folderPath)
     if (result.ok) {
@@ -372,7 +397,7 @@ export function VaultProvider({ children }) {
       // recent files
       recentFiles,
       // CRUD
-      createFile, createFolder, renameFile, deleteFile, deleteFolder,
+      createFile, createFolder, renameFile, moveFile, deleteFile, deleteFolder,
       duplicateFile,
       // builtin
       openBuiltinExample,
