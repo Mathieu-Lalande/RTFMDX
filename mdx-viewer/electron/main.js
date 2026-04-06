@@ -103,24 +103,40 @@ async function getCompiler() {
       // Images relatives → vault:// protocol pour Electron
       if (filePath && vaultPath) {
         const dir = path.dirname(filePath)
+        const toVault = (src) => {
+          if (/^https?:\/\/|^vault:\/\//.test(src)) return src
+          const abs = path.isAbsolute(src) ? src : path.resolve(dir, src)
+          // Triple slash pour éviter que Windows traite le lecteur (C:) comme un host d'URL
+          return 'vault:///' + abs.replace(/\\/g, '/')
+        }
+        // Markdown: ![alt](src) — chemins relatifs ET absolus (C:\, G:\, /chemin)
         body = body.replace(
           /!\[([^\]]*)\]\((?!https?:\/\/|vault:\/\/)([^)]+)\)/g,
-          (_, alt, src) => {
-            const abs = path.isAbsolute(src)
-              ? src
-              : path.resolve(dir, src)
-            return `![${alt}](vault://${abs.replace(/\\/g, '/')})`
-          }
+          (_, alt, src) => `![${alt}](${toVault(src.trim())})`
+        )
+        // HTML: <img src="..." /> — chemins relatifs ET absolus
+        body = body.replace(
+          /<img(\s[^>]*?)src=(["'])(?!https?:\/\/|vault:\/\/)([^"']+)\2/gi,
+          (_, attrs, quote, src) => `<img${attrs}src=${quote}${toVault(src.trim())}${quote}`
         )
       }
 
-      const result = await compile(body, {
+      const opts = {
         outputFormat: 'function-body',
         development: false,
         remarkPlugins: [remarkGfm],
         rehypePlugins: [rehypeSlug],
-      })
-      return String(result)
+      }
+
+      try {
+        // Essai 1 : mode MXT complet (JSX autorisé)
+        const result = await compile(body, opts)
+        return String(result)
+      } catch {
+        // Fallback : mode Markdown pur (ignore le JSX/HTML invalide)
+        const result = await compile(body, { ...opts, format: 'md' })
+        return String(result)
+      }
     }
   }
   return _compile
@@ -140,16 +156,12 @@ function createWindow() {
   if (!protocol.isProtocolRegistered('vault')) {
     protocol.registerFileProtocol('vault', (request, callback) => {
       try {
-        const raw = decodeURIComponent(request.url.replace('vault://', ''))
+        // vault:///C:/path → strip "vault://" then strip leading "/" before drive letter
+        let raw = decodeURIComponent(request.url.replace('vault://', ''))
+        if (/^\/[A-Za-z]:/.test(raw)) raw = raw.slice(1)
         const filePath = path.normalize(raw)
-        if (vaultPath) {
-          const vaultResolved = path.resolve(vaultPath)
-          const fileResolved = path.resolve(filePath)
-          if (fileResolved !== vaultResolved && !fileResolved.startsWith(vaultResolved + path.sep)) {
-            callback({ error: -10 }) // net::ERR_ACCESS_DENIED
-            return
-          }
-        }
+        // Lecture seule — on autorise n'importe quel fichier local (images depuis C:, G:, etc.)
+        if (!fs.existsSync(filePath)) { callback({ error: -6 }); return } // ERR_FILE_NOT_FOUND
         callback({ path: filePath })
       } catch { callback({ error: -2 }) }
     })
