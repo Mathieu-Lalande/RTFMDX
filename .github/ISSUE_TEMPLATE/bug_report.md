@@ -1,21 +1,32 @@
 ---
 name: Bug report
-about: Something isn't working
+about: Something isn't working as expected
+title: "[Bug] "
 labels: bug
+assignees: Mathieu-Lalande
 ---
 
-**Version**
-<!-- e.g. 1.0.16 — found in Settings or the status bar -->
+## Description
+<!-- A clear and concise description of the bug -->
 
-**What happened?**
-
-**Steps to reproduce**
+## Steps to reproduce
 1. 
 2. 
 3. 
 
-**Expected behavior**
+## Expected behavior
+<!-- What should have happened? -->
 
-**OS**
-- [ ] Windows 10
-- [ ] Windows 11
+## Actual behavior
+<!-- What happened instead? -->
+
+## Screenshots
+<!-- If applicable, drag and drop screenshots here -->
+
+## Environment
+- **App version:** <!-- e.g. 1.0.16 — visible in the bottom status bar -->
+- **OS:** <!-- Windows 10 / Windows 11 -->
+- **File type:** <!-- .md / .mxt -->
+
+## Additional context
+<!-- Anything else that might help reproduce the issue -->

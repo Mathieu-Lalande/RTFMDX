@@ -1,11 +1,22 @@
 ---
 name: Feature request
-about: Suggest an idea
+about: Suggest an idea or improvement
+title: "[Feature] "
 labels: enhancement
+assignees: Mathieu-Lalande
 ---
 
-**What problem does this solve?**
+## Problem
+<!-- What problem does this feature solve? What are you trying to do that you can't right now? -->
 
-**Describe the solution you'd like**
+## Proposed solution
+<!-- Describe the feature you'd like. Be as specific as possible. -->
 
-**Anything else?**
+## Alternatives considered
+<!-- Have you tried any workarounds? Are there other ways to solve this? -->
+
+## Use case
+<!-- Who would benefit from this? How often would you use it? -->
+
+## Additional context
+<!-- Mockups, examples from other apps, screenshots — anything that helps visualize the idea -->
