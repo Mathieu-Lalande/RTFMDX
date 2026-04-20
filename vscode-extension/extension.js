@@ -43,15 +43,21 @@ function activate(context) {
       panel?.update(editor.document)
     }),
 
-    // Ouvrir automatiquement l'aperçu pour les .mxt
+    // Ouvrir automatiquement l'aperçu pour les .mxt et .md
     vscode.window.onDidChangeActiveTextEditor(editor => {
       if (!editor) return
       const ext = require('path').extname(editor.document.fileName).toLowerCase()
-      if (ext === '.mxt' && !PreviewPanel.panels.has(editor.document.fileName)) {
+      if (SUPPORTED.has(ext) && !PreviewPanel.panels.has(editor.document.fileName)) {
         PreviewPanel.createOrReveal(context, editor.document)
       }
     })
   )
+
+  // Vérifier l'éditeur déjà actif au moment de l'activation
+  const activeEditor = vscode.window.activeTextEditor
+  if (activeEditor && isSupported(activeEditor.document)) {
+    PreviewPanel.createOrReveal(context, activeEditor.document)
+  }
 }
 
 function deactivate() {}
