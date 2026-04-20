@@ -1,6 +1,8 @@
 # Dépendances
 mdx-viewer/node_modules/
 test-electron/node_modules/
+vscode-extension/node_modules/
+vscode-extension/package-lock.json
 
 # Build outputs
 mdx-viewer/dist/

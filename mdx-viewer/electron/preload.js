@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('electron', {
   saveFile: (data) => ipcRenderer.invoke('save-file', data),
   saveFileAs: (data) => ipcRenderer.invoke('save-file-as', data),
   openFile: () => ipcRenderer.invoke('open-file'),
+  readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
 
   // Git Integration
   gitDetectRepo: (dir) => ipcRenderer.invoke('git-detect-repo', dir),

@@ -510,6 +510,15 @@ app.whenReady().then(() => {
     return { ok: false }
   })
 
+  // Lit n'importe quel fichier sans vérification vault (pour fichiers hors vault)
+  ipcMain.handle('read-file', (_, filePath) => {
+    try {
+      if (!fs.existsSync(filePath)) return { ok: false, error: 'Fichier introuvable' }
+      const content = fs.readFileSync(filePath, 'utf-8')
+      return { ok: true, content, name: path.basename(filePath), path: filePath }
+    } catch (e) { return { ok: false, error: e.message } }
+  })
+
   // ── Auto-updater install ───────────────────────────────────────────────
   ipcMain.handle('install-update', () => {
     if (autoUpdater) autoUpdater.quitAndInstall()

@@ -239,7 +239,7 @@ function SearchReplaceBar({ open, onClose, source, onReplace, isReadOnly }) {
 function AppContent() {
   const {
     activeTab, activeTabPath, tabs, vaultPath, vaultFiles,
-    updateTabContent, markTabSaved, openFileByPath, openVaultFromPath,
+    updateTabContent, markTabSaved, openFileByPath, openVaultFromPath, openTab,
     canBack, canForward, navigateBack, navigateForward,
     backlinks, openBuiltinExample,
   } = useVault()
@@ -424,18 +424,17 @@ function AppContent() {
     }
   }, [save, updateTabContent, openBuiltinExample])
 
-  // Handler quand un fichier git est sélectionné
-  const handleGitFileSelected = useCallback((data) => {
-    if (data?.file?.path) {
-      // Sauvegarder le repo path si fourni
-      if (data.repoDir) {
-        setGitRepoPath(data.repoDir)
-        window.electron.saveConfig({ gitRepoPath: data.repoDir }).catch(err => console.error('[config] Échec de la sauvegarde du repo git:', err))
-      }
-      // Charger le fichier depuis git
-      openFileByPath(data.file.path)
+  // Handler quand un fichier est sélectionné depuis le modal git/répertoire
+  const handleGitFileSelected = useCallback(async (data) => {
+    if (!data?.file?.path) return
+    if (data.repoDir) {
+      setGitRepoPath(data.repoDir)
+      window.electron.saveConfig({ gitRepoPath: data.repoDir }).catch(() => {})
+      // Si aucun vault ouvert, utiliser le répertoire comme vault (met à jour la sidebar)
+      if (!vaultPath) await openVaultFromPath(data.repoDir)
     }
-  }, [openFileByPath])
+    openFileByPath(data.file.path)
+  }, [openFileByPath, openVaultFromPath, vaultPath])
 
   // Drag & drop to open vault or file
   const handleDragOver = useCallback((e) => { e.preventDefault() }, [])

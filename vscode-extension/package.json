@@ -1,0 +1,93 @@
+{
+  "name": "mxt-viewer",
+  "displayName": "MXT Viewer",
+  "description": "Prévisualisation et édition de fichiers .mxt (Markdown Extended)",
+  "version": "0.1.0",
+  "publisher": "mxt-viewer",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onCommand:mxt.openPreview"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "mxt",
+        "aliases": ["MXT", "mxt", "Markdown Extended"],
+        "extensions": [".mxt"],
+        "mimetypes": ["text/mxt"]
+      }
+    ],
+    "grammars": [
+      {
+        "language": "mxt",
+        "scopeName": "text.html.markdown",
+        "path": "./node_modules/vscode-markdown-tm-grammar/syntaxes/markdown.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "mxt.openPreview",
+        "title": "MXT : Ouvrir l'aperçu côte à côte",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "mxt.openPreviewToSide",
+        "title": "MXT : Aperçu (côté)",
+        "icon": "$(open-preview)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "mxt.openPreview",
+          "when": "resourceExtname == .mxt || resourceExtname == .md",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "mxt.openPreview",
+          "when": "resourceExtname == .mxt || resourceExtname == .md",
+          "group": "navigation"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "mxt.openPreview",
+        "key": "ctrl+shift+v",
+        "when": "resourceExtname == .mxt || resourceExtname == .md"
+      }
+    ],
+    "configuration": {
+      "title": "MXT Viewer",
+      "properties": {
+        "mxtViewer.theme": {
+          "type": "string",
+          "enum": ["auto", "dark", "light"],
+          "default": "auto",
+          "description": "Thème de l'aperçu MXT"
+        },
+        "mxtViewer.previewDebounce": {
+          "type": "number",
+          "default": 300,
+          "description": "Délai (ms) avant la mise à jour de l'aperçu lors de la frappe"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node build.js",
+    "postinstall": "node build.js"
+  },
+  "dependencies": {
+    "marked": "^4.3.0",
+    "highlight.js": "^11.9.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0"
+  }
+}

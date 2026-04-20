@@ -202,14 +202,12 @@ export function VaultProvider({ children }) {
 
   // ─── Ouverture de fichier ─────────────────────────────────────────────────
   const openFileByPath = useCallback(async (filePath) => {
-    // Si déjà ouvert en onglet, juste switcher
     const existing = tabs.find(t => t.path === filePath)
     if (existing) { setActiveTab(filePath); return { ok: true } }
-    const result = await window.electron.readVaultFile(filePath)
-    if (result.ok) {
-      // Si forceReadOnly n'est pas spécifié, déterminer basé sur extension
-      openTab({ path: result.path, name: result.name, content: result.content })
-    }
+    // Essaie d'abord via vault (avec vérification sécurité), sinon lecture directe
+    let result = await window.electron.readVaultFile(filePath)
+    if (!result.ok) result = await window.electron.readFile(filePath)
+    if (result.ok) openTab({ path: result.path, name: result.name, content: result.content })
     return result
   }, [tabs, setActiveTab, openTab])
 
