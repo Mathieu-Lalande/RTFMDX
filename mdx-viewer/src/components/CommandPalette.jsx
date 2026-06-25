@@ -30,7 +30,6 @@ const BUILTIN_COMMANDS = [
   { id: 'new-file',               label: 'Nouveau fichier',           iconId: 'file-new', category: 'Fichier' },
   { id: 'open-vault',             label: 'Ouvrir un vault',           iconId: 'folder',   category: 'Vault' },
   { id: 'save',                   label: 'Sauvegarder',               iconId: 'save',     category: 'Fichier' },
-  { id: 'search-replace',         label: 'Rechercher & Remplacer',    iconId: 'edit',     category: 'Fichier' },
   { id: 'open-builtin-example',   label: "Ouvrir l'exemple intégré",  iconId: 'example',  category: 'Fichier' },
 ]
 
@@ -331,6 +330,7 @@ export default function CommandPalette({ open, onClose, onAction, mode }) {
   const [selected, setSelected] = useState(0)
   const inputRef = useRef(null)
   const listRef = useRef(null)
+  const keyboardNavRef = useRef(false)
 
   useEffect(() => {
     if (open) { setQuery(''); setSelected(0); setTimeout(() => inputRef.current?.focus(), 50) }
@@ -383,15 +383,17 @@ export default function CommandPalette({ open, onClose, onAction, mode }) {
     return filtered
   }, [query, vaultFiles, openFileByPath, createFile, openVault, onAction, recentFiles, openBuiltinExample])
 
-  // Scroll l'item sélectionné dans la vue
+  // Scroll l'item sélectionné dans la vue (uniquement via clavier)
   useEffect(() => {
-    const el = listRef.current?.children[selected]
+    if (!keyboardNavRef.current) return
+    keyboardNavRef.current = false
+    const el = listRef.current?.querySelector(`[data-item-idx="${selected}"]`)
     el?.scrollIntoView({ block: 'nearest' })
   }, [selected])
 
   const handleKey = (e) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setSelected(s => Math.min(s + 1, items.length - 1)) }
-    if (e.key === 'ArrowUp') { e.preventDefault(); setSelected(s => Math.max(s - 1, 0)) }
+    if (e.key === 'ArrowDown') { e.preventDefault(); keyboardNavRef.current = true; setSelected(s => Math.min(s + 1, items.length - 1)) }
+    if (e.key === 'ArrowUp') { e.preventDefault(); keyboardNavRef.current = true; setSelected(s => Math.max(s - 1, 0)) }
     if (e.key === 'Enter' && items[selected]) { items[selected].action(); onClose() }
     if (e.key === 'Escape') onClose()
   }
@@ -457,6 +459,7 @@ export default function CommandPalette({ open, onClose, onAction, mode }) {
             ) : (
               <div
                 key={g.item.id}
+                data-item-idx={g.idx}
                 onClick={() => { g.item.action(); onClose() }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '10px',

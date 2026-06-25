@@ -113,6 +113,18 @@ const IcoCopy = () => (
     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
   </svg>
 )
+const IcoStar = ({ filled }) => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill={filled ? '#fbbf24' : 'none'} stroke={filled ? '#fbbf24' : 'currentColor'} strokeWidth="2">
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+  </svg>
+)
+
+const IcoSplit = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="3" y="3" width="18" height="18" rx="2"/>
+    <line x1="12" y1="3" x2="12" y2="21"/>
+  </svg>
+)
 
 // ─── Item dossier ────────────────────────────────────────────────────────────
 function DirItem({ node, depth, activeFilePath, creating, setCreating }) {
@@ -229,16 +241,20 @@ function DirItem({ node, depth, activeFilePath, creating, setCreating }) {
 
 // ─── Item fichier ────────────────────────────────────────────────────────────
 function FileItem({ node, depth, activeFilePath }) {
-  const { openFileByPath, renameFile, deleteFile, duplicateFile } = useVault()
+  const { openFileByPath, renameFile, deleteFile, duplicateFile, favorites, toggleFavorite, openSecondaryPanel } = useVault()
   const [renaming, setRenaming] = useState(false)
   const [menu, setMenu] = useState(null)
   const isActive = node.path === activeFilePath
+  const isFav = favorites.includes(node.path)
   const indent = depth * 14
   const label = node.name.replace(/\.(mxt|md)$/, '')
 
   const handleContextMenu = (e) => {
     e.preventDefault(); e.stopPropagation()
     setMenu({ x: e.clientX, y: e.clientY, items: [
+      { label: isFav ? 'Désépingler' : 'Épingler en favoris', icon: <IcoStar filled={isFav} />, action: () => toggleFavorite(node.path) },
+      { label: 'Ouvrir en panneau droit', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>, action: () => openSecondaryPanel(node.path) },
+      '---',
       { label: 'Renommer',  icon: <IcoPencil />, action: () => setRenaming(true) },
       { label: 'Dupliquer', icon: <IcoCopy />,   action: () => duplicateFile(node.path) },
       '---',
@@ -273,9 +289,68 @@ function FileItem({ node, depth, activeFilePath }) {
           ? <InlineInput defaultValue={node.name}
               onConfirm={n => { renameFile({ oldPath: node.path, newName: n }); setRenaming(false) }}
               onCancel={() => setRenaming(false)} />
-          : <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+          : <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
         }
+        {isFav && !renaming && <span style={{ flexShrink: 0, fontSize: '9px', color: '#fbbf24', marginLeft: '2px' }}>★</span>}
       </div>
+      {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
+    </div>
+  )
+}
+
+// ─── Section favoris ─────────────────────────────────────────────────────────
+function FavoritesSection({ activeFilePath }) {
+  const { favorites, vaultFiles, openFileByPath, toggleFavorite, openSecondaryPanel } = useVault()
+  const [menu, setMenu] = useState(null)
+
+  if (!favorites.length) return null
+
+  const favFiles = favorites.map(path => {
+    const found = vaultFiles.find(f => f.path === path)
+    return found || { path, name: path.split(/[\\/]/).pop() }
+  })
+
+  return (
+    <div style={{ marginBottom: '4px' }}>
+      <div style={{ padding: '8px 10px 4px', fontSize: '10px', fontWeight: '600', letterSpacing: '0.07em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+        Favoris
+      </div>
+      {favFiles.map(f => {
+        const isActive = f.path === activeFilePath
+        const label = f.name.replace(/\.(mxt|md)$/, '')
+        return (
+          <div
+            key={f.path}
+            onClick={() => openFileByPath(f.path)}
+            onContextMenu={e => {
+              e.preventDefault()
+              e.stopPropagation()
+              setMenu({
+                x: e.clientX, y: e.clientY,
+                items: [
+                  { label: 'Désépingler', icon: <IcoStar />, action: () => toggleFavorite(f.path) },
+                  '---',
+                  { label: 'Ouvrir en panneau droit', icon: <IcoSplit />, action: () => openSecondaryPanel(f.path) },
+                ],
+              })
+            }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '5px',
+              padding: '3px 6px', cursor: 'pointer', borderRadius: '5px',
+              background: isActive ? 'var(--accent-soft)' : 'transparent',
+              color: isActive ? 'var(--accent-hover)' : 'var(--text-secondary)',
+              fontSize: '12px', userSelect: 'none',
+              borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+            }}
+            onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--bg-hover)' }}
+            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+          >
+            <span style={{ fontSize: '10px', color: '#fbbf24', flexShrink: 0 }}>★</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{label}</span>
+          </div>
+        )
+      })}
+      <div style={{ height: '1px', background: 'var(--border)', margin: '6px 4px 2px' }} />
       {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
     </div>
   )
@@ -286,9 +361,31 @@ function TreeItem({ node, depth, activeFilePath, creating, setCreating }) {
   return <FileItem node={node} depth={depth} activeFilePath={activeFilePath} />
 }
 
+// ─── Helpers filtrage ─────────────────────────────────────────────────────────
+function flattenFiles(nodes) {
+  return nodes.flatMap(n => n.type === 'dir' ? flattenFiles(n.children || []) : [n])
+}
+
 // ─── FileTree racine ─────────────────────────────────────────────────────────
-export default function FileTree({ activeFilePath, creating, setCreating }) {
+export default function FileTree({ activeFilePath, creating, setCreating, search }) {
   const { tree, createFile, createFolder } = useVault()
+
+  // Mode recherche : liste plate filtrée
+  if (search?.trim()) {
+    const q = search.trim().toLowerCase()
+    const matches = flattenFiles(tree).filter(f => f.name.toLowerCase().includes(q))
+    return (
+      <div style={{ padding: '4px' }}>
+        {matches.length === 0 ? (
+          <div style={{ padding: '20px 12px', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
+            Aucun fichier trouvé
+          </div>
+        ) : matches.map(node => (
+          <FileItem key={node.path} node={node} depth={0} activeFilePath={activeFilePath} />
+        ))}
+      </div>
+    )
+  }
 
   if (!tree.length && !creating) return (
     <div style={{ padding: '20px 12px', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center', lineHeight: 1.7 }}>
@@ -298,7 +395,7 @@ export default function FileTree({ activeFilePath, creating, setCreating }) {
 
   return (
     <div style={{ padding: '4px' }}>
-      {/* Input inline à la racine du vault */}
+      <FavoritesSection activeFilePath={activeFilePath} />
       {creating?.dir === '__root__' && (
         <div style={{ padding: '3px 6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
           <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{creating.type === 'folder' ? <IcoFolder /> : <IcoFile />}</span>

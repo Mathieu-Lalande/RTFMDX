@@ -3,9 +3,10 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { EditorView, keymap } from '@codemirror/view'
 import { autocompletion, startCompletion } from '@codemirror/autocomplete'
+import { foldGutter, foldKeymap, foldService } from '@codemirror/language'
 import { createTheme } from '@uiw/codemirror-themes'
 import { tags as t } from '@lezer/highlight'
-import { useRef } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 
 // ─── Thèmes ──────────────────────────────────────────────────────────────────
 const mxtThemeDark = createTheme({
@@ -135,6 +136,28 @@ const slashKeymap = keymap.of([{
   },
 }])
 
+// ─── Folding des sections markdown (## Titre) ─────────────────────────────────
+const markdownFoldService = foldService.of((state, lineStart, lineEnd) => {
+  const text = state.doc.lineAt(lineStart).text
+  const match = /^(#{1,6})\s/.exec(text)
+  if (!match) return null
+  const level = match[1].length
+
+  let end = state.doc.length
+  for (let pos = lineEnd + 1; pos < state.doc.length;) {
+    const nextLine = state.doc.lineAt(pos)
+    const m = /^(#{1,6})\s/.exec(nextLine.text)
+    if (m && m[1].length <= level) {
+      end = nextLine.from - 1
+      break
+    }
+    pos = nextLine.to + 1
+  }
+
+  if (end <= lineEnd) return null
+  return { from: lineEnd, to: end }
+})
+
 // ─── Extensions de base ───────────────────────────────────────────────────────
 const baseExtensions = [
   markdown({ base: markdownLanguage, codeLanguages: languages }),
@@ -148,6 +171,11 @@ const baseExtensions = [
     '.cm-activeLine': { backgroundColor: 'rgba(128, 128, 128, 0.06) !important' },
     '.cm-cursor': { borderLeftColor: '#6366f1', borderLeftWidth: '2px' },
     '.cm-selectionBackground': { backgroundColor: 'rgba(99, 102, 241, 0.2) !important' },
+    // Fold gutter
+    '.cm-foldGutter': { minWidth: '14px' },
+    '.cm-foldGutter .cm-gutterElement': { padding: '0 2px', cursor: 'pointer', color: 'var(--text-muted, #4a5568)', fontSize: '10px', lineHeight: '1.6em', opacity: '0.5', userSelect: 'none' },
+    '.cm-foldGutter .cm-gutterElement:hover': { opacity: '1', color: 'var(--accent, #6366f1)' },
+    '.cm-foldPlaceholder': { background: 'var(--accent-soft, rgba(99,102,241,0.12))', border: '1px solid rgba(99,102,241,0.3)', borderRadius: '4px', color: 'var(--accent-hover, #818cf8)', padding: '0 6px', cursor: 'pointer', fontSize: '12px' },
     // Style du dropdown autocomplete
     '.cm-tooltip-autocomplete': {
       background: 'var(--bg-secondary, #1a1f2e)',
@@ -164,6 +192,14 @@ const baseExtensions = [
       color: 'var(--accent-hover, #818cf8)',
     },
   }),
+  markdownFoldService,
+  foldGutter({ markerDOM(open) {
+    const el = document.createElement('span')
+    el.textContent = open ? '▾' : '▸'
+    el.title = open ? 'Replier (Ctrl+Shift+[)' : 'Déplier (Ctrl+Shift+])'
+    return el
+  }}),
+  keymap.of(foldKeymap),
   slashKeymap,
   autocompletion({
     override: [slashCompletionSource],
@@ -187,14 +223,120 @@ const baseExtensions = [
   }),
 ]
 
-export default function Editor({ value, onChange, isReadOnly, theme, onEditorCreated }) {
-  const isDark = theme !== 'light'
-  const bgColor = isDark ? '#0f1117' : '#fafafa'
-  const editorTheme = isDark ? mxtThemeDark : mxtThemeLight
+// ─── Minimap ──────────────────────────────────────────────────────────────────
+const MINIMAP_W = 80
+
+function Minimap({ value, editorView, isDark }) {
+  const canvasRef = useRef(null)
   const containerRef = useRef(null)
+  const scrollStateRef = useRef({ topRatio: 0, heightRatio: 1 })
+  const drawnHRef = useRef(0)
+  const isDragging = useRef(false)
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current
+    const container = containerRef.current
+    if (!canvas || !container) return
+    const ctx = canvas.getContext('2d')
+    const H = container.clientHeight
+    if (!H) return
+    canvas.width = MINIMAP_W
+    canvas.height = H
+    ctx.clearRect(0, 0, MINIMAP_W, H)
+
+    const lines = value.split('\n')
+    const naturalH = lines.length * 2
+    // sf < 1 compresse les lignes quand le doc est plus grand que le canvas
+    const sf = H / Math.max(naturalH, H)
+    // zone réellement dessinée : min(naturalH, H)
+    const drawnH = naturalH * sf
+    drawnHRef.current = drawnH
+
+    lines.forEach((line, i) => {
+      const y = i * 2 * sf
+      const lh = Math.max(0.8, 2 * sf)
+      const trimmed = line.trim()
+      if (!trimmed) return
+      const indent = Math.min((line.length - trimmed.length) * 1.5, MINIMAP_W * 0.35)
+      const w = Math.max(4, Math.min(trimmed.length * 1.1, MINIMAP_W - indent - 2))
+      if (/^#{1,6}\s/.test(trimmed)) ctx.fillStyle = isDark ? 'rgba(200,210,230,0.8)' : 'rgba(30,40,60,0.7)'
+      else if (/^```|^~~~/.test(trimmed)) ctx.fillStyle = isDark ? 'rgba(100,120,155,0.55)' : 'rgba(80,100,140,0.45)'
+      else ctx.fillStyle = isDark ? 'rgba(100,110,130,0.38)' : 'rgba(80,90,110,0.32)'
+      ctx.fillRect(indent, y, w, lh)
+    })
+
+    // Indicateur de viewport relatif à la zone dessinée (pas à H entier)
+    const { topRatio, heightRatio } = scrollStateRef.current
+    const vpTop = topRatio * drawnH
+    const vpH = Math.max(16, heightRatio * drawnH)
+    ctx.fillStyle = 'rgba(99,102,241,0.1)'
+    ctx.fillRect(0, vpTop, MINIMAP_W, vpH)
+    ctx.strokeStyle = 'rgba(99,102,241,0.45)'
+    ctx.lineWidth = 1
+    ctx.strokeRect(0.5, vpTop + 0.5, MINIMAP_W - 1, vpH - 1)
+  }, [value, isDark])
+
+  useEffect(() => {
+    if (!editorView) return
+    const scrollEl = editorView.scrollDOM
+    const update = () => {
+      scrollStateRef.current = {
+        topRatio: scrollEl.scrollTop / Math.max(1, scrollEl.scrollHeight),
+        heightRatio: scrollEl.clientHeight / Math.max(1, scrollEl.scrollHeight),
+      }
+      draw()
+    }
+    scrollEl.addEventListener('scroll', update, { passive: true })
+    update()
+    return () => scrollEl.removeEventListener('scroll', update)
+  }, [editorView, draw])
+
+  useEffect(() => { draw() }, [value, draw])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => draw())
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [draw])
+
+  const scrollToY = (clientY) => {
+    if (!editorView) return
+    const rect = canvasRef.current.getBoundingClientRect()
+    // Utiliser drawnH pour que le ratio corresponde à la zone de contenu réelle
+    const drawnH = drawnHRef.current || rect.height
+    const ratio = Math.max(0, Math.min(1, (clientY - rect.top) / drawnH))
+    editorView.scrollDOM.scrollTop = ratio * editorView.scrollDOM.scrollHeight
+  }
+
+  const handleMouseDown = (e) => {
+    isDragging.current = true
+    scrollToY(e.clientY)
+    const onMove = (e) => { if (isDragging.current) scrollToY(e.clientY) }
+    const onUp = () => { isDragging.current = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 
   return (
-    <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: bgColor }}>
+    <div ref={containerRef} style={{ width: `${MINIMAP_W}px`, height: '100%', flexShrink: 0, overflow: 'hidden', borderLeft: '1px solid var(--border)', cursor: 'pointer', background: isDark ? '#090c12' : '#f0f2f5' }}>
+      <canvas
+        ref={canvasRef}
+        style={{ display: 'block', width: '100%' }}
+        onMouseDown={handleMouseDown}
+      />
+    </div>
+  )
+}
+
+export default function Editor({ value, onChange, isReadOnly, theme, onEditorCreated }) {
+  const isDark = theme !== 'light'
+  const editorTheme = isDark ? mxtThemeDark : mxtThemeLight
+  const [internalView, setInternalView] = useState(null)
+
+  return (
+    <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: isDark ? '#0f1117' : '#fafafa' }}>
       <div style={{
         padding: '6px 16px', background: 'var(--bg-secondary)',
         borderBottom: '1px solid var(--border)',
@@ -214,29 +356,32 @@ export default function Editor({ value, onChange, isReadOnly, theme, onEditorCre
           Tapez <kbd style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: '3px', padding: '0 4px', fontFamily: 'inherit' }}>/</kbd> pour insérer un composant
         </span>
       </div>
-      <div ref={containerRef} style={{ flex: 1, overflow: 'auto' }}>
-        <CodeMirror
-          value={value}
-          height="100%"
-          extensions={baseExtensions}
-          theme={editorTheme}
-          onChange={isReadOnly ? undefined : onChange}
-          readOnly={isReadOnly}
-          onCreateEditor={(view) => onEditorCreated?.(view)}
-          basicSetup={{
-            lineNumbers: true,
-            foldGutter: false,
-            dropCursor: false,
-            allowMultipleSelections: true,
-            indentOnInput: true,
-            bracketMatching: true,
-            closeBrackets: true,
-            autocompletion: false,
-            highlightActiveLine: true,
-            highlightSelectionMatches: true,
-            searchKeymap: false,
-          }}
-        />
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <CodeMirror
+            value={value}
+            height="100%"
+            extensions={baseExtensions}
+            theme={editorTheme}
+            onChange={isReadOnly ? undefined : onChange}
+            readOnly={isReadOnly}
+            onCreateEditor={(view) => { setInternalView(view); onEditorCreated?.(view) }}
+            basicSetup={{
+              lineNumbers: true,
+              foldGutter: false,
+              dropCursor: false,
+              allowMultipleSelections: true,
+              indentOnInput: true,
+              bracketMatching: true,
+              closeBrackets: true,
+              autocompletion: false,
+              highlightActiveLine: true,
+              highlightSelectionMatches: true,
+              searchKeymap: false,
+            }}
+          />
+        </div>
+        <Minimap value={value} editorView={internalView} isDark={isDark} />
       </div>
     </div>
   )

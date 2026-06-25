@@ -101,7 +101,7 @@ export default function Sidebar({ activeFilePath, width, onResizeStart }) {
             }}>Ouvrir un vault</button>
           </div>
         ) : (
-          <FileTree activeFilePath={activeFilePath} creating={creating} setCreating={setCreating} />
+          <FileTree activeFilePath={activeFilePath} creating={creating} setCreating={setCreating} search={search} />
         )}
       </div>
 

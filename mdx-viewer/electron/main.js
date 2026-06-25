@@ -182,7 +182,10 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    try {
+      const { protocol } = new URL(url)
+      if (['https:', 'http:', 'mailto:'].includes(protocol)) shell.openExternal(url)
+    } catch {}
     return { action: 'deny' }
   })
   mainWindow.on('closed', () => { mainWindow = null })
@@ -498,6 +501,19 @@ app.whenReady().then(() => {
     return { ok: false }
   })
 
+  ipcMain.handle('export-html', async (_, { html, title }) => {
+    const slug = (title || 'export').replace(/[^a-zA-Z0-9\-_]/g, '-').slice(0, 60)
+    const result = await dialog.showSaveDialog(mainWindow, {
+      filters: [{ name: 'Page HTML', extensions: ['html'] }],
+      defaultPath: path.join(vaultPath || app.getPath('documents'), slug + '.html')
+    })
+    if (!result.canceled && result.filePath) {
+      fs.writeFileSync(result.filePath, html, 'utf-8')
+      return { ok: true, path: result.filePath }
+    }
+    return { ok: false }
+  })
+
   ipcMain.handle('open-file', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       filters: [{ name: 'Fichiers texte', extensions: ['mxt', 'md'] }],
@@ -510,12 +526,19 @@ app.whenReady().then(() => {
     return { ok: false }
   })
 
-  // Lit n'importe quel fichier sans vérification vault (pour fichiers hors vault)
+  // Lit un fichier — restreint au vault si un vault est ouvert
   ipcMain.handle('read-file', (_, filePath) => {
     try {
-      if (!fs.existsSync(filePath)) return { ok: false, error: 'Fichier introuvable' }
-      const content = fs.readFileSync(filePath, 'utf-8')
-      return { ok: true, content, name: path.basename(filePath), path: filePath }
+      const resolved = path.resolve(filePath)
+      if (vaultPath) {
+        const vaultResolved = path.resolve(vaultPath)
+        if (resolved !== vaultResolved && !resolved.startsWith(vaultResolved + path.sep)) {
+          return { ok: false, error: 'Accès refusé : chemin hors du vault' }
+        }
+      }
+      if (!fs.existsSync(resolved)) return { ok: false, error: 'Fichier introuvable' }
+      const content = fs.readFileSync(resolved, 'utf-8')
+      return { ok: true, content, name: path.basename(resolved), path: resolved }
     } catch (e) { return { ok: false, error: e.message } }
   })
 

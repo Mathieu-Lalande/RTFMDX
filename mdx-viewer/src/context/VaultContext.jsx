@@ -35,6 +35,40 @@ export function VaultProvider({ children }) {
   // ─── Tags ────────────────────────────────────────────────────────────────
   const [allTags, setAllTags] = useState({}) // { tagName: [{ path, name }] }
 
+  // ─── Panneau secondaire (split multi-fichiers) ───────────────────────────
+  const [secondaryPath, setSecondaryPath] = useState(null)
+  const [secondaryContent, setSecondaryContent] = useState(null)
+  const [secondaryFrontmatter, setSecondaryFrontmatter] = useState({})
+
+  const openSecondaryPanel = useCallback(async (filePath) => {
+    if (!filePath) { setSecondaryPath(null); setSecondaryContent(null); setSecondaryFrontmatter({}); return }
+    let result = await window.electron.readVaultFile(filePath)
+    if (!result.ok) result = await window.electron.readFile(filePath)
+    if (result.ok) {
+      const { frontmatter } = parseFrontmatter(result.content)
+      setSecondaryPath(filePath)
+      setSecondaryContent(result.content)
+      setSecondaryFrontmatter(frontmatter)
+    }
+  }, [])
+
+  const closeSecondaryPanel = useCallback(() => {
+    setSecondaryPath(null)
+    setSecondaryContent(null)
+    setSecondaryFrontmatter({})
+  }, [])
+
+  // ─── Favoris ─────────────────────────────────────────────────────────────
+  const [favorites, setFavorites] = useState([]) // [path, ...]
+
+  const toggleFavorite = useCallback((filePath) => {
+    setFavorites(prev => {
+      const next = prev.includes(filePath) ? prev.filter(p => p !== filePath) : [...prev, filePath]
+      window.electron.saveConfig({ favorites: next }).catch(console.error)
+      return next
+    })
+  }, [])
+
   // ─── Recent files ────────────────────────────────────────────────────────
   const [recentFiles, setRecentFiles] = useState([]) // [{ path, name, openedAt }]
 
@@ -60,10 +94,11 @@ export function VaultProvider({ children }) {
       }
     })
 
-    // Load config (recent files, etc.)
+    // Load config (recent files, favorites, etc.)
     window.electron.getConfig().then(cfg => {
       if (cfg.recentFiles) setRecentFiles(cfg.recentFiles)
-    }).catch(err => console.error('[config] Échec du chargement des fichiers récents:', err))
+      if (cfg.favorites) setFavorites(cfg.favorites)
+    }).catch(err => console.error('[config] Échec du chargement de la config:', err))
 
     window.electron.onVaultChanged((newTree) => {
       setTree(newTree)
@@ -358,6 +393,11 @@ export function VaultProvider({ children }) {
       backlinks,
       // tags
       allTags,
+      // panneau secondaire
+      secondaryPath, secondaryContent, secondaryFrontmatter,
+      openSecondaryPanel, closeSecondaryPanel,
+      // favoris
+      favorites, toggleFavorite,
       // recent files
       recentFiles,
       // CRUD
